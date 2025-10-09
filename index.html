@@ -62,6 +62,37 @@
 </head>
 
 <body class="bg-gray-50">
+    <!-- Painel de Notificações Global -->
+    <div id="notificacoes-painel" class="hidden fixed top-0 right-0 h-full w-full max-w-sm bg-white shadow-lg z-50 transform transition-transform duration-300 ease-in-out">
+        <div class="flex flex-col h-full">
+            <div class="flex justify-between items-center p-4 border-b">
+                <h2 class="text-xl font-semibold text-gray-800">Notificações</h2>
+                <button id="close-notificacoes-painel" class="p-2 rounded-full hover:bg-gray-200">
+                    <span class="material-symbols-outlined text-gray-600">close</span>
+                </button>
+            </div>
+            <div class="flex-grow overflow-y-auto">
+                <!-- Seção de Notificações Fixadas -->
+                <div id="notificacoes-fixadas-container" class="border-b" style="display: none;">
+                     <h3 class="text-sm font-bold text-gray-500 p-3 bg-gray-50">Fixadas</h3>
+                     <div id="notificacoes-fixadas-lista" class="divide-y divide-gray-100">
+                        <!-- As notificações fixadas serão inseridas aqui -->
+                     </div>
+                </div>
+                <!-- Seção de Notificações Normais -->
+                <div>
+                     <h3 class="text-sm font-bold text-gray-500 p-3 bg-gray-50">Outras</h3>
+                     <div id="notificacoes-normais-lista" class="divide-y divide-gray-100">
+                        <!-- As notificações normais serão inseridas aqui -->
+                     </div>
+                </div>
+            </div>
+            <div class="p-4 border-t">
+                <button class="w-full text-center text-blue-600 font-medium hover:underline">Ver todas as notificações</button>
+            </div>
+        </div>
+    </div>
+
 
   <!--
   Tailwind JIT safelist:
@@ -179,38 +210,6 @@
                     </div>
                 </div>
             </header>
-
-            <!-- Painel de Notificações -->
-            <div id="notificacoes-painel" class="hidden fixed top-0 right-0 h-full w-full max-w-sm bg-white shadow-lg z-50 transform transition-transform duration-300 ease-in-out">
-                <div class="flex flex-col h-full">
-                    <div class="flex justify-between items-center p-4 border-b">
-                        <h2 class="text-xl font-semibold text-gray-800">Notificações</h2>
-                        <button id="close-notificacoes-painel" class="p-2 rounded-full hover:bg-gray-200">
-                            <span class="material-symbols-outlined text-gray-600">close</span>
-                        </button>
-                    </div>
-                    <div class="flex-grow overflow-y-auto">
-                        <!-- Seção de Notificações Fixadas -->
-                        <div id="notificacoes-fixadas-container" class="border-b">
-                             <h3 class="text-sm font-bold text-gray-500 p-3 bg-gray-50">Fixadas</h3>
-                             <div id="notificacoes-fixadas-lista" class="divide-y divide-gray-100">
-                                <!-- As notificações fixadas serão inseridas aqui -->
-                             </div>
-                        </div>
-                        <!-- Seção de Notificações Normais -->
-                        <div>
-                             <h3 class="text-sm font-bold text-gray-500 p-3 bg-gray-50">Outras</h3>
-                             <div id="notificacoes-normais-lista" class="divide-y divide-gray-100">
-                                <!-- As notificações normais serão inseridas aqui -->
-                             </div>
-                        </div>
-                    </div>
-                    <div class="p-4 border-t">
-                        <button class="w-full text-center text-blue-600 font-medium hover:underline">Ver todas as notificações</button>
-                    </div>
-                </div>
-            </div>
-
             <main class="flex-1 px-10 py-8">
                 <div class="layout-content-container mx-auto flex max-w-7xl flex-col gap-8">
                     <div class="flex flex-col gap-2">
@@ -1808,9 +1807,12 @@
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
                  <div class="flex items-center gap-4">
-                    <button class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                        <span class="material-symbols-outlined text-gray-600"> notifications </span>
-                    </button>
+                    <div class="relative">
+                        <button class="notification-bell-btn relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                            <span class="material-symbols-outlined text-gray-600"> notifications </span>
+                            <div class="notification-red-dot hidden absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></div>
+                        </button>
+                    </div>
                     <div class="relative">
                         <button id="profile-button-receber" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
                         <div id="profile-dropdown-receber" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
@@ -2363,9 +2365,12 @@
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
                  <div class="flex items-center gap-4">
-                    <button class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                        <span class="material-symbols-outlined text-gray-600"> notifications </span>
-                    </button>
+                    <div class="relative">
+                        <button class="notification-bell-btn relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                            <span class="material-symbols-outlined text-gray-600"> notifications </span>
+                            <div class="notification-red-dot hidden absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></div>
+                        </button>
+                    </div>
                     <div class="relative">
                         <button id="profile-button-fluxo" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
                         <div id="profile-dropdown-fluxo" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
@@ -2687,9 +2692,12 @@
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
                  <div class="flex items-center gap-4">
-                    <button class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                        <span class="material-symbols-outlined text-gray-600"> notifications </span>
-                    </button>
+                     <div class="relative">
+                        <button class="notification-bell-btn relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                            <span class="material-symbols-outlined text-gray-600"> notifications </span>
+                            <div class="notification-red-dot hidden absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></div>
+                        </button>
+                    </div>
                     <div class="relative">
                         <button id="profile-button-movimentacao" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
                         <div id="profile-dropdown-movimentacao" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
