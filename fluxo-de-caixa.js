@@ -1210,10 +1210,23 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         periodoAteInput.value = lastDayOfMonth.toISOString().split('T')[0];
     }
 
-    // Initialize the page
-    setDefaultDates();
-    populateContasBancarias().then(() => {
-        calculateAndRenderCashFlow();
+    // --- Initial Load & Event Listeners ---
+    function initializePage() {
+        setDefaultDates();
+        populateContasBancarias().then(() => {
+            calculateAndRenderCashFlow();
+        });
+    }
+
+    // Initialize the page immediately
+    initializePage();
+
+    // Add an event listener to refresh data when the view is shown
+    document.addEventListener('view-shown', (e) => {
+        if (e.detail.viewId === 'fluxo-de-caixa-page') {
+            console.log("Fluxo de Caixa view shown, refreshing data...");
+            calculateAndRenderCashFlow();
+        }
     });
 
     // Setup tab functionality
