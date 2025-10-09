@@ -4367,6 +4367,10 @@
 
                 pagamentosSnapshots[index].forEach(pagoDoc => {
                     const pagoData = pagoDoc.data();
+
+                    // ADICIONE ESTA LINHA:
+                    if (pagoData.estornado === true || pagoData.tipoTransacao === 'Estorno') return;
+
                     const transacaoDateStr = pagoData.dataTransacao;
                     if (pagoData.tipoTransacao === 'Pagamento' && transacaoDateStr) {
                         const transacaoDate = new Date(transacaoDateStr + 'T00:00:00');
@@ -4412,6 +4416,10 @@
 
                 recebimentosSnapshots[index].forEach(recebidoDoc => {
                     const recebidoData = recebidoDoc.data();
+
+                    // ADICIONE ESTA LINHA:
+                    if (recebidoData.estornado === true || recebidoData.tipoTransacao === 'Estorno') return;
+
                     const transacaoDateStr = recebidoData.dataTransacao;
                     if (recebidoData.tipoTransacao === 'Recebimento' && transacaoDateStr) {
                         const transacaoDate = new Date(transacaoDateStr + 'T00:00:00');
@@ -6756,14 +6764,27 @@
                 if (!despesaDoc.exists() || !pagamentoDoc.exists()) {
                     throw "Despesa ou pagamento original não encontrado.";
                 }
-
-                const despesaData = despesaDoc.data();
-                const pagamentoData = pagamentoDoc.data();
-
-                if (pagamentoData.estornado) {
+                if (pagamentoDoc.data().estornado) {
                     throw "Esta transação já foi estornada.";
                 }
 
+                // --- LÓGICA ADICIONADA ---
+                // 1. Encontrar a movimentação bancária correspondente a este pagamento
+                const movQuery = query(
+                    collection(db, 'users', userId, 'movimentacoesBancarias'),
+                    where("origemId", "==", pagamentoId)
+                );
+                const movSnap = await getDocs(movQuery); // getDocs é seguro fora da transação se os IDs não mudam
+
+                // 2. Deletar a movimentação bancária encontrada (se houver)
+                if (!movSnap.empty) {
+                    const movDocRef = doc(db, 'users', userId, 'movimentacoesBancarias', movSnap.docs[0].id);
+                    transaction.delete(movDocRef);
+                }
+                // --- FIM DA LÓGICA ADICIONADA ---
+
+                const despesaData = despesaDoc.data();
+                const pagamentoData = pagamentoDoc.data();
                 const valorPrincipalEstornado = pagamentoData.valorPrincipal || 0;
 
                 const novoTotalPago = despesaData.totalPago - valorPrincipalEstornado;
@@ -6801,7 +6822,7 @@
                 });
             });
 
-            console.log("Estorno concluído com sucesso!");
+            console.log("Estorno completo (Título e Conciliação) concluído com sucesso!");
             closeVisualizarModal();
             openVisualizarModal(despesaId);
 
@@ -7813,14 +7834,27 @@ function validateParcelasSum() {
                 if (!receitaDoc.exists() || !recebimentoDoc.exists()) {
                     throw "Receita ou recebimento original não encontrado.";
                 }
-
-                const receitaData = receitaDoc.data();
-                const recebimentoData = recebimentoDoc.data();
-
-                if (recebimentoData.estornado) {
+                if (recebimentoDoc.data().estornado) {
                     throw "Esta transação já foi estornada.";
                 }
 
+                // --- LÓGICA ADICIONADA ---
+                // 1. Encontrar a movimentação bancária correspondente a este recebimento
+                const movQuery = query(
+                    collection(db, 'users', userId, 'movimentacoesBancarias'),
+                    where("origemId", "==", recebimentoId)
+                );
+                const movSnap = await getDocs(movQuery);
+
+                // 2. Deletar a movimentação bancária encontrada
+                if (!movSnap.empty) {
+                    const movDocRef = doc(db, 'users', userId, 'movimentacoesBancarias', movSnap.docs[0].id);
+                    transaction.delete(movDocRef);
+                }
+                // --- FIM DA LÓGICA ADICIONADA ---
+
+                const receitaData = receitaDoc.data();
+                const recebimentoData = recebimentoDoc.data();
                 const valorPrincipalEstornado = recebimentoData.valorPrincipal || 0;
                 const jurosEstornados = recebimentoData.jurosRecebidos || 0;
                 const descontosEstornados = recebimentoData.descontosConcedidos || 0;
@@ -7829,7 +7863,6 @@ function validateParcelasSum() {
                 const novoTotalJuros = receitaData.totalJuros - jurosEstornados;
                 const novoTotalDescontos = receitaData.totalDescontos - descontosEstornados;
                 const novoSaldoPendente = (receitaData.valorOriginal + novoTotalJuros) - novoTotalRecebido - novoTotalDescontos;
-
 
                 let novoStatus;
                 const today = new Date();
@@ -7867,7 +7900,7 @@ function validateParcelasSum() {
                 });
             });
 
-            console.log("Estorno de recebimento concluído com sucesso!");
+            console.log("Estorno completo (Título e Conciliação) de recebimento concluído com sucesso!");
             visualizarReceitaModal.classList.add('hidden');
             openVisualizarReceitaModal(receitaId);
 
