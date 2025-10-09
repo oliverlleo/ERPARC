@@ -261,6 +261,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
 
         for (const doc of pagamentos) {
             const data = doc.data();
+            if (data.estornado === true) continue; // <-- ADICIONE ESTA LINHA
             const parentDespesaRef = doc.ref.parent.parent;
             if (parentDespesaRef) {
                 const despesaSnap = await getDoc(parentDespesaRef);
@@ -290,6 +291,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
 
         for (const doc of recebimentos) {
             const data = doc.data();
+            if (data.estornado === true) continue; // <-- ADICIONE ESTA LINHA
             const parentReceitaRef = doc.ref.parent.parent;
              if (parentReceitaRef) {
                 const receitaSnap = await getDoc(parentReceitaRef);
