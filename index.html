@@ -4367,6 +4367,10 @@
 
                 pagamentosSnapshots[index].forEach(pagoDoc => {
                     const pagoData = pagoDoc.data();
+
+                    // ADICIONE ESTA LINHA:
+                    if (pagoData.estornado === true || pagoData.tipoTransacao === 'Estorno') return;
+
                     const transacaoDateStr = pagoData.dataTransacao;
                     if (pagoData.tipoTransacao === 'Pagamento' && transacaoDateStr) {
                         const transacaoDate = new Date(transacaoDateStr + 'T00:00:00');
@@ -4412,6 +4416,10 @@
 
                 recebimentosSnapshots[index].forEach(recebidoDoc => {
                     const recebidoData = recebidoDoc.data();
+
+                    // ADICIONE ESTA LINHA:
+                    if (recebidoData.estornado === true || recebidoData.tipoTransacao === 'Estorno') return;
+
                     const transacaoDateStr = recebidoData.dataTransacao;
                     if (recebidoData.tipoTransacao === 'Recebimento' && transacaoDateStr) {
                         const transacaoDate = new Date(transacaoDateStr + 'T00:00:00');
