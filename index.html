@@ -6657,14 +6657,29 @@
                     const pData = pagamentoDoc.data();
                     const tr = historyBody.insertRow();
                     const isEstorno = pData.tipoTransacao === 'Estorno';
+                    const isEstornado = pData.estornado === true;
+
+                    // Apply line-through style if the transaction is reversed
+                    if (isEstornado) {
+                        tr.style.textDecoration = 'line-through';
+                        tr.classList.add('text-gray-400');
+                    }
+
                     tr.innerHTML = `
-                        <td class="px-4 py-2 text-sm ${isEstorno ? 'text-red-500' : 'text-green-600'}">${pData.tipoTransacao}</td>
+                        <td class="px-4 py-2 text-sm ${isEstorno ? 'text-red-500' : (isEstornado ? 'text-gray-500' : 'text-green-600')}">
+                            ${pData.tipoTransacao} ${isEstornado ? '(Estornado)' : ''}
+                        </td>
                         <td class="px-4 py-2 text-sm">${new Date(pData.dataTransacao + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-4 py-2 text-sm">${formatCurrency(pData.valorPrincipal || 0)}</td>
                         <td class="px-4 py-2 text-sm">${formatCurrency(pData.jurosPagos || 0)}</td>
                         <td class="px-4 py-2 text-sm">${formatCurrency(pData.descontosAplicados || 0)}</td>
                         <td class="px-4 py-2 text-sm">
-                            ${!isEstorno ? `<button class="estornar-btn text-red-500 hover:underline" data-pagamento-id="${pagamentoDoc.id}" data-despesa-id="${despesaId}">Estornar</button>` : ''}
+                            <button class="estornar-btn text-red-500 hover:underline disabled:text-gray-400 disabled:cursor-not-allowed"
+                                    data-pagamento-id="${pagamentoDoc.id}"
+                                    data-despesa-id="${despesaId}"
+                                    ${isEstorno || isEstornado ? 'disabled' : ''}>
+                                Estornar
+                            </button>
                         </td>
                     `;
                 });
@@ -6749,14 +6764,27 @@
                 if (!despesaDoc.exists() || !pagamentoDoc.exists()) {
                     throw "Despesa ou pagamento original não encontrado.";
                 }
-
-                const despesaData = despesaDoc.data();
-                const pagamentoData = pagamentoDoc.data();
-
-                if (pagamentoData.estornado) {
+                if (pagamentoDoc.data().estornado) {
                     throw "Esta transação já foi estornada.";
                 }
 
+                // --- LÓGICA ADICIONADA ---
+                // 1. Encontrar a movimentação bancária correspondente a este pagamento
+                const movQuery = query(
+                    collection(db, 'users', userId, 'movimentacoesBancarias'),
+                    where("origemId", "==", pagamentoId)
+                );
+                const movSnap = await getDocs(movQuery); // getDocs é seguro fora da transação se os IDs não mudam
+
+                // 2. Deletar a movimentação bancária encontrada (se houver)
+                if (!movSnap.empty) {
+                    const movDocRef = doc(db, 'users', userId, 'movimentacoesBancarias', movSnap.docs[0].id);
+                    transaction.delete(movDocRef);
+                }
+                // --- FIM DA LÓGICA ADICIONADA ---
+
+                const despesaData = despesaDoc.data();
+                const pagamentoData = pagamentoDoc.data();
                 const valorPrincipalEstornado = pagamentoData.valorPrincipal || 0;
 
                 const novoTotalPago = despesaData.totalPago - valorPrincipalEstornado;
@@ -6794,7 +6822,7 @@
                 });
             });
 
-            console.log("Estorno concluído com sucesso!");
+            console.log("Estorno completo (Título e Conciliação) concluído com sucesso!");
             closeVisualizarModal();
             openVisualizarModal(despesaId);
 
@@ -7739,14 +7767,28 @@ function validateParcelasSum() {
                     const pData = recebimentoDoc.data();
                     const tr = historyBody.insertRow();
                     const isEstorno = pData.tipoTransacao === 'Estorno';
+                    const isEstornado = pData.estornado === true;
+
+                    if (isEstornado) {
+                        tr.style.textDecoration = 'line-through';
+                        tr.classList.add('text-gray-400');
+                    }
+
                     tr.innerHTML = `
-                        <td class="px-4 py-2 text-sm ${isEstorno ? 'text-red-500' : 'text-green-600'}">${pData.tipoTransacao}</td>
+                        <td class="px-4 py-2 text-sm ${isEstorno ? 'text-red-500' : (isEstornado ? 'text-gray-500' : 'text-green-600')}">
+                            ${pData.tipoTransacao} ${isEstornado ? '(Estornado)' : ''}
+                        </td>
                         <td class="px-4 py-2 text-sm">${new Date(pData.dataTransacao + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-4 py-2 text-sm">${formatCurrency(pData.valorPrincipal || 0)}</td>
                         <td class="px-4 py-2 text-sm">${formatCurrency(pData.jurosRecebidos || 0)}</td>
                         <td class="px-4 py-2 text-sm">${formatCurrency(pData.descontosConcedidos || 0)}</td>
                         <td class="px-4 py-2 text-sm">
-                            ${!isEstorno && pData.tipoTransacao !== 'Estorno' ? `<button class="estornar-recebimento-btn text-red-500 hover:underline" data-recebimento-id="${recebimentoDoc.id}" data-receita-id="${receitaId}">Estornar</button>` : ''}
+                             <button class="estornar-recebimento-btn text-red-500 hover:underline disabled:text-gray-400 disabled:cursor-not-allowed"
+                                     data-recebimento-id="${recebimentoDoc.id}"
+                                     data-receita-id="${receitaId}"
+                                     ${isEstorno || isEstornado ? 'disabled' : ''}>
+                                 Estornar
+                             </button>
                         </td>
                     `;
                 });
@@ -7792,14 +7834,27 @@ function validateParcelasSum() {
                 if (!receitaDoc.exists() || !recebimentoDoc.exists()) {
                     throw "Receita ou recebimento original não encontrado.";
                 }
-
-                const receitaData = receitaDoc.data();
-                const recebimentoData = recebimentoDoc.data();
-
-                if (recebimentoData.estornado) {
+                if (recebimentoDoc.data().estornado) {
                     throw "Esta transação já foi estornada.";
                 }
 
+                // --- LÓGICA ADICIONADA ---
+                // 1. Encontrar a movimentação bancária correspondente a este recebimento
+                const movQuery = query(
+                    collection(db, 'users', userId, 'movimentacoesBancarias'),
+                    where("origemId", "==", recebimentoId)
+                );
+                const movSnap = await getDocs(movQuery);
+
+                // 2. Deletar a movimentação bancária encontrada
+                if (!movSnap.empty) {
+                    const movDocRef = doc(db, 'users', userId, 'movimentacoesBancarias', movSnap.docs[0].id);
+                    transaction.delete(movDocRef);
+                }
+                // --- FIM DA LÓGICA ADICIONADA ---
+
+                const receitaData = receitaDoc.data();
+                const recebimentoData = recebimentoDoc.data();
                 const valorPrincipalEstornado = recebimentoData.valorPrincipal || 0;
                 const jurosEstornados = recebimentoData.jurosRecebidos || 0;
                 const descontosEstornados = recebimentoData.descontosConcedidos || 0;
@@ -7808,7 +7863,6 @@ function validateParcelasSum() {
                 const novoTotalJuros = receitaData.totalJuros - jurosEstornados;
                 const novoTotalDescontos = receitaData.totalDescontos - descontosEstornados;
                 const novoSaldoPendente = (receitaData.valorOriginal + novoTotalJuros) - novoTotalRecebido - novoTotalDescontos;
-
 
                 let novoStatus;
                 const today = new Date();
@@ -7846,7 +7900,7 @@ function validateParcelasSum() {
                 });
             });
 
-            console.log("Estorno de recebimento concluído com sucesso!");
+            console.log("Estorno completo (Título e Conciliação) de recebimento concluído com sucesso!");
             visualizarReceitaModal.classList.add('hidden');
             openVisualizarReceitaModal(receitaId);
 

@@ -261,7 +261,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
 
         for (const doc of pagamentos) {
             const data = doc.data();
-            if (data.estornado === true || data.tipoTransacao === "Estorno") continue;
+            if (data.estornado === true || data.tipoTransacao === 'Estorno') continue;
             const parentDespesaRef = doc.ref.parent.parent;
             if (parentDespesaRef) {
                 const despesaSnap = await getDoc(parentDespesaRef);
@@ -291,7 +291,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
 
         for (const doc of recebimentos) {
             const data = doc.data();
-            if (data.estornado === true || data.tipoTransacao === "Estorno") continue;
+            if (data.estornado === true || data.tipoTransacao === 'Estorno') continue;
             const parentReceitaRef = doc.ref.parent.parent;
              if (parentReceitaRef) {
                 const receitaSnap = await getDoc(parentReceitaRef);
