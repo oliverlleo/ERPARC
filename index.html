@@ -120,7 +120,7 @@
           </div>
       </div>
       <div class="absolute bottom-0 left-0 w-full p-4 border-t bg-white">
-          <a href="#" class="block text-center text-blue-600 hover:underline">Ver todas as notificações</a>
+          <a href="#" class="nav-link block text-center text-blue-600 hover:underline" data-target="notifications-page">Ver todas as notificações</a>
       </div>
   </div>
 
@@ -2880,6 +2880,106 @@
       </div>
   </div>
 
+  <!-- Container da Tela de Notificações -->
+  <div id="notifications-page" class="view-container min-h-screen w-full">
+     <div class="relative flex size-full min-h-screen flex-col group/design-root w-full">
+        <div class="layout-container flex h-full grow flex-col w-full">
+            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-10 py-3">
+                <a href="#" class="flex items-center gap-4 text-gray-800 nav-link" data-target="main-page">
+                    <div class="size-8 text-[var(--primary-color)]">
+                        <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M4 8L24 4L44 8L24 12L4 8Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 24L24 20L44 24L24 28L4 24Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 40L24 36L44 40L24 44L4 40Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path></svg>
+                    </div>
+                    <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
+                </a>
+                <nav class="flex items-center gap-8">
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
+                    <div class="relative">
+                        <button id="financeiro-nav-link-notifications" class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors flex items-center gap-1">
+                            <span>Financeiro</span>
+                            <span class="material-symbols-outlined text-base">expand_more</span>
+                        </button>
+                        <div id="financeiro-dropdown-notifications" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                        </div>
+                    </div>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
+                </nav>
+                 <div class="flex items-center gap-4">
+                    <button id="notification-bell-notifications" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-notifications" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                    </button>
+                    <div class="relative">
+                        <button id="profile-button-notifications" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
+                        <div id="profile-dropdown-notifications" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                            <div class="px-4 py-2 text-sm text-gray-700 border-b">
+                                <p class="font-medium">Logado como:</p>
+                                <p id="user-email-notifications" class="truncate"></p>
+                            </div>
+                            <a href="#" id="logout-button-notifications" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            <main class="flex-1 px-10 py-8 bg-gray-50">
+                <div class="layout-content-container mx-auto flex max-w-4xl flex-col gap-8">
+                    <div class="flex justify-between items-center">
+                        <div class="flex flex-col gap-2">
+                            <h1 class="text-gray-900 text-3xl font-bold leading-tight tracking-tight">Notificações</h1>
+                            <p class="text-gray-600 text-base font-normal leading-normal">Gerencie e visualize todas as suas notificações.</p>
+                        </div>
+                        <div>
+                            <button id="mark-all-as-read-btn" class="inline-flex items-center justify-center rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                                <span class="material-symbols-outlined mr-2">done_all</span>
+                                Marcar todas como lidas
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Filter and Search Toolbar -->
+                    <div class="p-4 bg-white rounded-lg border shadow-sm">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="md:col-span-1">
+                                <label for="notification-search-input" class="block text-sm font-medium text-gray-700">Pesquisar</label>
+                                <input type="text" id="notification-search-input" placeholder="Pesquisar por cliente, fornecedor..." class="form-input mt-1 block w-full">
+                            </div>
+                            <div>
+                                <label for="notification-status-filter" class="block text-sm font-medium text-gray-700">Filtrar por status</label>
+                                <select id="notification-status-filter" class="form-select mt-1 block w-full">
+                                    <option value="all">Todas</option>
+                                    <option value="unread">Não lidas</option>
+                                    <option value="read">Lidas</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="notification-type-filter" class="block text-sm font-medium text-gray-700">Filtrar por tipo</label>
+                                <select id="notification-type-filter" class="form-select mt-1 block w-full">
+                                    <option value="all">Todos os tipos</option>
+                                    <!-- Options will be populated by JS -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notification List Area -->
+                    <div id="full-notification-list-container" class="space-y-6">
+                        <!-- Notification groups (e.g., Hoje, Ontem) will be inserted here by JS -->
+                        <div class="text-center text-gray-500 py-12">
+                            <p>Nenhuma notificação encontrada.</p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+  </div>
+
+
   <!-- Modal de Lançamento de Entrada/Saída Avulsa -->
   <div id="mov-manual-entry-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
       <div class="relative top-20 mx-auto p-5 border w-full max-w-xl shadow-lg rounded-md bg-white">
@@ -2964,7 +3064,7 @@
     import { getFirestore, doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc, query, where, getDocs, getDoc, updateDoc, runTransaction, writeBatch, collectionGroup, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
     import { initializeFluxoDeCaixa } from './fluxo-de-caixa.js';
     import { initializeMovimentacaoBancaria } from './movimentacao-bancaria.js';
-    import { initializeNotifications } from './notifications.js';
+    import { initializeNotifications, initializeNotificationsPage } from './notifications.js';
 
     // Configuração do Firebase
     const firebaseConfig = {
@@ -4759,6 +4859,7 @@
             updateUiForUser(currentUserName);
             setupListeners(effectiveUserId);
             initializeNotifications(db, effectiveUserId);
+            initializeNotificationsPage(db, effectiveUserId);
             initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
             initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
             showView('main-page');
@@ -4779,6 +4880,7 @@
                 updateUiForUser(currentUserName);
                 setupListeners(effectiveUserId);
                 initializeNotifications(db, effectiveUserId);
+                initializeNotificationsPage(db, effectiveUserId);
                 initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
                 initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
                 showView('main-page');
@@ -4898,6 +5000,8 @@
                 // We are NOT a Firebase Auth user, so we call setupListeners with the admin's ID
                 // to access the correct data partitions.
                 setupListeners(effectiveUserId);
+                initializeNotifications(db, effectiveUserId);
+                initializeNotificationsPage(db, effectiveUserId);
                 initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
                 initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
                 showView('main-page');
@@ -4966,6 +5070,7 @@
 
             setupListeners(effectiveUserId);
             initializeNotifications(db, effectiveUserId);
+            initializeNotificationsPage(db, effectiveUserId);
             showView('main-page');
 
         } catch (error) {
