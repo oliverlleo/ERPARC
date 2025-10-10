@@ -35,6 +35,17 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     let activeConciliacaoFilter = 'todas';
     const visaoRealizadoCheckbox = document.getElementById('visao-realizado-checkbox');
     const visaoProjetadoCheckbox = document.getElementById('visao-projetado-checkbox');
+    let whatIfScenario = []; // Array to hold simulated transactions
+
+    // --- DOM Elements (What-If Tab) ---
+    const whatIfReceitaForm = document.getElementById('what-if-receita-form');
+    const whatIfDespesaForm = document.getElementById('what-if-despesa-form');
+    const whatIfItemsContainer = document.getElementById('what-if-items-container');
+    const whatIfClearScenarioBtn = document.getElementById('what-if-clear-scenario-btn');
+    const whatIfSaldoInicialEl = document.getElementById('what-if-saldo-inicial');
+    const whatIfSaldoProjetadoEl = document.getElementById('what-if-saldo-projetado');
+    const whatIfSaldoSimuladoEl = document.getElementById('what-if-saldo-simulado');
+
 
     // --- Utility Functions (from common) ---
     const { formatCurrency, toCents, fromCents, showFeedback } = common;
@@ -178,6 +189,25 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 const projectedTransactions = await fetchProjectedTransactions(startDate, endDate);
                 unifiedTransactions.push(...projectedTransactions);
             }
+
+            // Add What-If scenario transactions
+            const simulatedTransactions = whatIfScenario.map(item => ({
+                id: item.id,
+                isProjected: true, // Treat them as projected for styling and logic
+                isSimulated: true, // Custom flag for What-If
+                data: item.data,
+                descricao: `(Simulado) ${item.descricao}`,
+                participante: 'Simulação',
+                planoDeConta: 'Simulação',
+                dataVencimento: item.data,
+                entrada: item.type === 'receita' ? item.valor : 0,
+                saida: item.type === 'despesa' ? item.valor : 0,
+                juros: 0,
+                desconto: 0,
+                conciliado: false,
+                type: `simulacao_${item.type}`
+            }));
+            unifiedTransactions.push(...simulatedTransactions);
 
             unifiedTransactions.sort((a, b) => new Date(a.data) - new Date(b.data));
 
@@ -554,9 +584,83 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         // 6. Comparativo de Períodos
         // This will require an additional data fetch, handled inside its process function.
         processAndRenderComparativoPeriodos();
+
+        // 7. What-If Chart
+        const whatIfData = processWhatIfEvolucaoSaldoData(transactions, saldoAnterior);
+        renderWhatIfEvolucaoSaldoChart(whatIfData);
+        whatIfSaldoInicialEl.textContent = formatCurrency(saldoAnterior);
+        whatIfSaldoProjetadoEl.textContent = formatCurrency(whatIfData.projetadoData[whatIfData.projetadoData.length - 1] * 100);
+        whatIfSaldoSimuladoEl.textContent = formatCurrency(whatIfData.simuladoData[whatIfData.simuladoData.length - 1] * 100);
     }
 
     // --- Data Processing Functions ---
+    function processWhatIfEvolucaoSaldoData(transactions, saldoAnterior) {
+        const dailyData = {};
+        transactions.forEach(t => {
+            const day = t.data;
+            if (!dailyData[day]) {
+                dailyData[day] = { realizado: 0, projetado: 0, simulado: 0 };
+            }
+            if (t.isSimulated) {
+                dailyData[day].simulado += (t.entrada - t.saida);
+            } else if (t.isProjected) {
+                dailyData[day].projetado += (t.entrada - t.saida);
+            } else {
+                dailyData[day].realizado += (t.entrada - t.saida);
+            }
+        });
+
+        const sortedDays = Object.keys(dailyData).sort();
+        const labels = [];
+        const realizadoData = [];
+        const projetadoData = [];
+        const simuladoData = [];
+
+        let saldoRealizado = saldoAnterior;
+        let saldoProjetado = saldoAnterior;
+        let saldoSimulado = saldoAnterior;
+        let lastRealizedDayIndex = -1;
+
+        sortedDays.forEach((day, index) => {
+            labels.push(new Date(day + 'T00:00:00').toLocaleDateString('pt-BR'));
+
+            saldoRealizado += dailyData[day].realizado;
+            saldoProjetado = saldoRealizado + dailyData[day].projetado;
+            saldoSimulado = saldoProjetado + dailyData[day].simulado;
+
+            if (dailyData[day].realizado !== 0) {
+                 lastRealizedDayIndex = index;
+            }
+
+            realizadoData.push(saldoRealizado / 100);
+            projetadoData.push(saldoProjetado / 100);
+            simuladoData.push(saldoSimulado / 100);
+        });
+
+        // Ensure the lines connect properly
+        for (let i = 0; i < sortedDays.length; i++) {
+            if (i > 0) {
+                if (dailyData[sortedDays[i]].realizado === 0) {
+                    realizadoData[i] = realizadoData[i-1];
+                }
+                 if (dailyData[sortedDays[i]].projetado === 0) {
+                    projetadoData[i] = projetadoData[i-1] + (dailyData[sortedDays[i]].realizado / 100);
+                }
+                 if (dailyData[sortedDays[i]].simulado === 0) {
+                    simuladoData[i] = simuladoData[i-1] + ((dailyData[sortedDays[i]].realizado + dailyData[sortedDays[i]].projetado) / 100)
+                }
+            }
+        }
+
+        // After the last realized day, the "realizado" line should be flat.
+        if (lastRealizedDayIndex > -1) {
+            for (let i = lastRealizedDayIndex + 1; i < labels.length; i++) {
+                realizadoData[i] = realizadoData[lastRealizedDayIndex];
+            }
+        }
+
+        return { labels, realizadoData, projetadoData, simuladoData, lastRealizedDayIndex };
+    }
     function processReceitaVsDespesaData(transactions) {
         const monthlyData = {};
         const showRealizado = visaoRealizadoCheckbox.checked;
@@ -760,6 +864,69 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     }
 
     // --- Chart Rendering Functions ---
+    function renderWhatIfEvolucaoSaldoChart({ labels, realizadoData, projetadoData, simuladoData, lastRealizedDayIndex }) {
+        const ctx = document.getElementById('chart-what-if-evolucao-saldo')?.getContext('2d');
+        if (!ctx) return;
+
+        if (chartInstances.whatIfEvolucaoSaldo) {
+            chartInstances.whatIfEvolucaoSaldo.destroy();
+        }
+
+        chartInstances.whatIfEvolucaoSaldo = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Saldo Realizado',
+                        data: realizadoData,
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        fill: false,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Projeção Base',
+                        data: projetadoData,
+                        borderColor: 'rgba(255, 159, 64, 1)',
+                        borderDash: [5, 5],
+                        backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                        fill: false,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Projeção Simulada',
+                        data: simuladoData,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                         borderDash: [5, 5],
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        fill: false,
+                        tension: 0.1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        ticks: {
+                            callback: value => formatCurrency(value * 100) // Convert back to cents for formatting
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: context => `${context.dataset.label}: ${formatCurrency(context.raw * 100)}`
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     function renderReceitaVsDespesaChart({ labels, receitas, despesas }) {
         const ctx = document.getElementById('chart-receita-vs-despesa')?.getContext('2d');
         if (!ctx) return;
@@ -1201,6 +1368,74 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         }
     });
 
+    // --- What-If Logic ---
+    function handleWhatIfFormSubmit(event) {
+        event.preventDefault();
+        const form = event.target;
+        const isReceita = form.id === 'what-if-receita-form';
+
+        const descricao = form.querySelector('input[type="text"]').value;
+        const valor = toCents(form.querySelector('input[placeholder*="00"]').value);
+        const data = form.querySelector('input[type="date"]').value;
+
+        if (!descricao || !valor || !data) {
+            alert("Por favor, preencha todos os campos para a simulação.");
+            return;
+        }
+
+        whatIfScenario.push({
+            id: `what-if-${Date.now()}`,
+            type: isReceita ? 'receita' : 'despesa',
+            descricao,
+            data,
+            valor,
+        });
+
+        form.reset();
+        renderWhatIfItems();
+        calculateAndRenderCashFlow();
+    }
+
+    function renderWhatIfItems() {
+        if (whatIfScenario.length === 0) {
+            whatIfItemsContainer.innerHTML = `<p class="text-center text-gray-500 text-sm">Nenhum item adicionado à simulação.</p>`;
+            return;
+        }
+
+        whatIfItemsContainer.innerHTML = '';
+        whatIfScenario.forEach(item => {
+            const isReceita = item.type === 'receita';
+            const itemEl = document.createElement('div');
+            itemEl.className = `flex justify-between items-center p-2 rounded-md ${isReceita ? 'bg-green-50' : 'bg-red-50'}`;
+            itemEl.innerHTML = `
+                <div class="text-sm">
+                    <p class="font-medium ${isReceita ? 'text-green-800' : 'text-red-800'}">${item.descricao}</p>
+                    <p class="text-xs text-gray-500">${new Date(item.data + 'T00:00:00').toLocaleDateString('pt-BR')} - ${formatCurrency(item.valor)}</p>
+                </div>
+                <button class="what-if-remove-item-btn text-gray-400 hover:text-red-600" data-id="${item.id}">
+                    <span class="material-symbols-outlined text-base">delete</span>
+                </button>
+            `;
+            whatIfItemsContainer.appendChild(itemEl);
+        });
+    }
+
+    whatIfItemsContainer.addEventListener('click', (e) => {
+        const removeBtn = e.target.closest('.what-if-remove-item-btn');
+        if (removeBtn) {
+            const itemId = removeBtn.dataset.id;
+            whatIfScenario = whatIfScenario.filter(item => item.id !== itemId);
+            renderWhatIfItems();
+            calculateAndRenderCashFlow();
+        }
+    });
+
+    whatIfClearScenarioBtn.addEventListener('click', () => {
+        whatIfScenario = [];
+        renderWhatIfItems();
+        calculateAndRenderCashFlow();
+    });
+
     // --- Initial Load ---
     function setDefaultDates() {
         const today = new Date();
@@ -1221,6 +1456,9 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     // Initialize the page immediately
     initializePage();
 
+    whatIfReceitaForm.addEventListener('submit', handleWhatIfFormSubmit);
+    whatIfDespesaForm.addEventListener('submit', handleWhatIfFormSubmit);
+
     // Add an event listener to refresh data when the view is shown
     document.addEventListener('view-shown', (e) => {
         if (e.detail.viewId === 'fluxo-de-caixa-page') {
@@ -1232,14 +1470,24 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     // Setup tab functionality
     const tabLinks = fluxoDeCaixaPage.querySelectorAll('.fluxo-tab-link');
     const tabContents = fluxoDeCaixaPage.querySelectorAll('.fluxo-tab-content');
+
     tabLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            tabLinks.forEach(item => item.classList.remove('active'));
+
+            // Remove active class from all tabs and hide all content
+            tabLinks.forEach(item => {
+                item.classList.remove('active');
+            });
             tabContents.forEach(content => content.classList.add('hidden'));
+
+            // Add active class to the clicked tab and show its content
             link.classList.add('active');
-            const activeContent = document.getElementById(`fluxo-${link.dataset.fluxoTab}-tab`);
-            if (activeContent) activeContent.classList.remove('hidden');
+            const activeContentId = `fluxo-${link.dataset.fluxoTab}-tab`;
+            const activeContent = document.getElementById(activeContentId);
+            if (activeContent) {
+                activeContent.classList.remove('hidden');
+            }
         });
     });
 }
