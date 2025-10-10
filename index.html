@@ -4684,7 +4684,19 @@
             // --- Update UI ---
             document.getElementById('dashboard-provisao-a-pagar').textContent = formatCurrency(provisaoAPagar);
             document.getElementById('dashboard-provisao-a-receber').textContent = formatCurrency(provisaoAReceber);
-            document.getElementById('dashboard-provisao-saldo').textContent = formatCurrency(saldoProvisao);
+
+            const saldoProjetadoEl = document.getElementById('dashboard-provisao-saldo');
+            saldoProjetadoEl.textContent = formatCurrency(saldoProvisao);
+            saldoProjetadoEl.classList.remove('text-red-600', 'text-green-600', 'text-yellow-500', 'text-gray-900');
+
+            if (saldoProvisao > 0) {
+                saldoProjetadoEl.classList.add('text-green-600');
+            } else if (saldoProvisao < 0) {
+                saldoProjetadoEl.classList.add('text-red-600');
+            } else {
+                saldoProjetadoEl.classList.add('text-yellow-500');
+            }
+
             document.getElementById('dashboard-pagar-total-mes').textContent = formatCurrency(pagarTotalMes);
             document.getElementById('dashboard-pagar-pago-mes').textContent = formatCurrency(pagarPagoMes);
             document.getElementById('dashboard-pagar-vencidas').textContent = formatCurrency(pagarVencidas);
