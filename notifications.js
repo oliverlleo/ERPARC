@@ -39,22 +39,24 @@ async function createNotification(db, userId, notificationData) {
 }
 
 /**
- * Checks for bills (despesas) that are due soon.
+ * Checks for bills (despesas) that are due soon (from tomorrow to 3 days from now).
  * @param {object} db - The Firestore database instance.
  * @param {string} userId - The ID of the user.
  */
 async function checkContasAPagarVencimento(db, userId) {
     const despesasRef = collection(db, 'users', userId, 'despesas');
     const today = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(today.getDate() + 1);
     const threeDaysFromNow = new Date();
     threeDaysFromNow.setDate(today.getDate() + 3);
 
-    const todayStr = today.toISOString().split('T')[0];
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
     const threeDaysStr = threeDaysFromNow.toISOString().split('T')[0];
 
     const q = query(despesasRef,
         where("status", "in", ["Pendente", "Pago Parcialmente"]),
-        where("vencimento", ">=", todayStr),
+        where("vencimento", ">=", tomorrowStr),
         where("vencimento", "<=", threeDaysStr)
     );
 
@@ -73,7 +75,7 @@ async function checkContasAPagarVencimento(db, userId) {
 }
 
 /**
- * Checks for overdue bills (despesas).
+ * Checks for bills (despesas) that are due today or are already overdue.
  * @param {object} db - The Firestore database instance.
  * @param {string} userId - The ID of the user.
  */
@@ -82,20 +84,34 @@ async function checkContasAPagarAtraso(db, userId) {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
 
+    // Query for all bills due today or in the past that are not fully paid.
     const q = query(despesasRef,
-        where("status", "in", ["Pendente", "Pago Parcialmente", "Vencido"])
+        where("status", "in", ["Pendente", "Pago Parcialmente", "Vencido"]),
+        where("vencimento", "<=", todayStr)
     );
 
     const querySnapshot = await getDocs(q);
     querySnapshot.forEach(doc => {
         const despesa = doc.data();
-        if (despesa.vencimento < todayStr) {
-             createNotification(db, userId, {
+        const valor = despesa.valorSaldo ?? despesa.valorOriginal ?? 0;
+
+        if (despesa.vencimento === todayStr) {
+            // Specific notification for bills due TODAY
+            createNotification(db, userId, {
+                relatedId: doc.id,
+                type: 'alerta_vencimento_hoje_pagar',
+                icon: 'event_busy',
+                iconClass: 'notification-icon-danger',
+                message: `A conta de "${despesa.favorecidoNome}" no valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor / 100)} vence HOJE.`,
+                link: `contas-a-pagar-page`
+            });
+        } else { // vencimento < todayStr, so it's overdue from a previous day.
+            createNotification(db, userId, {
                 relatedId: doc.id,
                 type: 'alerta_atraso_pagar',
                 icon: 'error',
                 iconClass: 'notification-icon-danger',
-                message: `A conta de "${despesa.favorecidoNome}" no valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(despesa.valorSaldo/100)} venceu.`,
+                message: `A conta de "${despesa.favorecidoNome}" no valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor / 100)} venceu.`,
                 link: `contas-a-pagar-page`
             });
         }
@@ -103,22 +119,24 @@ async function checkContasAPagarAtraso(db, userId) {
 }
 
 /**
- * Checks for receivables that are due soon.
+ * Checks for receivables that are due soon (from tomorrow to 3 days from now).
  * @param {object} db - The Firestore database instance.
  * @param {string} userId - The ID of the user.
  */
 async function checkContasAReceberVencimento(db, userId) {
     const receitasRef = collection(db, 'users', userId, 'receitas');
     const today = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(today.getDate() + 1);
     const threeDaysFromNow = new Date();
     threeDaysFromNow.setDate(today.getDate() + 3);
 
-    const todayStr = today.toISOString().split('T')[0];
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
     const threeDaysStr = threeDaysFromNow.toISOString().split('T')[0];
 
     const q = query(receitasRef,
         where("status", "in", ["Pendente", "Recebido Parcialmente"]),
-        where("dataVencimento", ">=", todayStr),
+        where("dataVencimento", ">=", tomorrowStr),
         where("dataVencimento", "<=", threeDaysStr)
     );
 
@@ -137,7 +155,7 @@ async function checkContasAReceberVencimento(db, userId) {
 }
 
 /**
- * Checks for overdue receivables.
+ * Checks for receivables that are due today or are already overdue.
  * @param {object} db - The Firestore database instance.
  * @param {string} userId - The ID of the user.
  */
@@ -146,14 +164,28 @@ async function checkContasAReceberAtraso(db, userId) {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
 
+    // Query for all receivables due today or in the past that are not fully paid.
     const q = query(receitasRef,
-        where("status", "in", ["Pendente", "Recebido Parcialmente", "Vencido"])
+        where("status", "in", ["Pendente", "Recebido Parcialmente", "Vencido"]),
+        where("dataVencimento", "<=", todayStr)
     );
-     const querySnapshot = await getDocs(q);
+
+    const querySnapshot = await getDocs(q);
     querySnapshot.forEach(doc => {
         const receita = doc.data();
         const vencimento = receita.dataVencimento || receita.vencimento;
-        if (vencimento < todayStr) {
+
+        if (vencimento === todayStr) {
+            // Specific notification for receivables due TODAY
+            createNotification(db, userId, {
+                relatedId: doc.id,
+                type: 'alerta_vencimento_hoje_receber',
+                icon: 'event_busy',
+                iconClass: 'notification-icon-danger',
+                message: `Título do cliente "${receita.clienteNome}" vence HOJE.`,
+                link: `contas-a-receber-page`
+            });
+        } else { // vencimento < todayStr, so it's overdue from a previous day.
             createNotification(db, userId, {
                 relatedId: doc.id,
                 type: 'alerta_atraso_receber',
