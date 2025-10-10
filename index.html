@@ -3157,6 +3157,8 @@
     const financeiroDropdownReceber = document.getElementById('financeiro-dropdown-receber');
     const financeiroNavLinkFluxo = document.getElementById('financeiro-nav-link-fluxo');
     const financeiroDropdownFluxo = document.getElementById('financeiro-dropdown-fluxo');
+    const financeiroNavLinkNotifications = document.getElementById('financeiro-nav-link-notifications');
+    const financeiroDropdownNotifications = document.getElementById('financeiro-dropdown-notifications');
 
     // --- Elementos de Notificação ---
     const notificationSidebar = document.getElementById('notification-sidebar');
@@ -6449,6 +6451,7 @@
     setupDropdown(financeiroNavLinkReceber, financeiroDropdownReceber);
     setupDropdown(financeiroNavLinkFluxo, financeiroDropdownFluxo);
     setupDropdown(financeiroNavLinkMovimentacao, financeiroDropdownMovimentacao);
+    setupDropdown(financeiroNavLinkNotifications, financeiroDropdownNotifications);
 
     async function openModal(isEdit = false) {
         if(despesaModal) {
