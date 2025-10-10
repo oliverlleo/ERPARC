@@ -58,10 +58,71 @@
         color: #374151;
         border: 1px solid #D1D5DB;
     }
+    #notification-sidebar.visible {
+        transform: translateX(0);
+    }
+    .notification-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .notification-item:last-child {
+        border-bottom: none;
+    }
+    .notification-icon {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 9999px;
+    }
+    .notification-icon-info { background-color: #EFF6FF; color: #3B82F6; } /* blue-100, blue-500 */
+    .notification-icon-success { background-color: #D1FAE5; color: #10B981; } /* green-100, green-500 */
+    .notification-icon-warning { background-color: #FEF3C7; color: #F59E0B; } /* yellow-100, yellow-500 */
+    .notification-icon-danger { background-color: #FEE2E2; color: #EF4444; } /* red-100, red-500 */
+    .notification-icon-comment { background-color: #EDE9FE; color: #8B5CF6; } /* violet-100, violet-500 */
+
+    .notification-content {
+        flex-grow: 1;
+    }
+    .notification-text {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        color: #1f2937;
+    }
+    .notification-time {
+        font-size: 0.75rem;
+        line-height: 1rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
   </style>
 </head>
 
 <body class="bg-gray-50">
+
+  <!-- Notification Sidebar -->
+  <div id="notification-sidebar" class="fixed top-0 right-0 h-full w-80 bg-white shadow-lg z-50 transform translate-x-full transition-transform duration-300 ease-in-out">
+      <div class="flex justify-between items-center p-4 border-b">
+          <h2 class="text-xl font-semibold">Notificações</h2>
+          <button id="close-notification-sidebar" class="p-2 rounded-full hover:bg-gray-200">
+              <span class="material-symbols-outlined">close</span>
+          </button>
+      </div>
+      <div id="notification-list" class="p-4 space-y-4 overflow-y-auto h-[calc(100%-120px)]">
+          <!-- Notification items will be dynamically inserted here -->
+          <div class="text-center text-gray-500 pt-8">
+              <p>Não há notificações no momento.</p>
+          </div>
+      </div>
+      <div class="absolute bottom-0 left-0 w-full p-4 border-t bg-white">
+          <a href="#" class="block text-center text-blue-600 hover:underline">Ver todas as notificações</a>
+      </div>
+  </div>
 
   <!--
   Tailwind JIT safelist:
@@ -161,8 +222,9 @@
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
                  <div class="flex items-center gap-4">
-                    <button class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                        <span class="material-symbols-outlined text-gray-600"> notifications </span>
+                    <button id="notification-bell-main" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-main" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
                     </button>
                     <div class="relative">
                         <button id="profile-button" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
@@ -380,8 +442,9 @@
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
                  <div class="flex items-center gap-4">
-                    <button class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                        <span class="material-symbols-outlined text-gray-600"> notifications </span>
+                    <button id="notification-bell-cadastros" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-cadastros" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
                     </button>
                     <div class="relative">
                         <button id="profile-button-cadastros" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
@@ -1228,8 +1291,9 @@
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
                  <div class="flex items-center gap-4">
-                    <button class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                        <span class="material-symbols-outlined text-gray-600"> notifications </span>
+                    <button id="notification-bell-contas" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-contas" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
                     </button>
                     <div class="relative">
                         <button id="profile-button-contas" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
@@ -1767,8 +1831,9 @@
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
                  <div class="flex items-center gap-4">
-                    <button class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                        <span class="material-symbols-outlined text-gray-600"> notifications </span>
+                    <button id="notification-bell-receber" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-receber" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
                     </button>
                     <div class="relative">
                         <button id="profile-button-receber" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
@@ -2322,8 +2387,9 @@
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
                  <div class="flex items-center gap-4">
-                    <button class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                        <span class="material-symbols-outlined text-gray-600"> notifications </span>
+                    <button id="notification-bell-fluxo" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-fluxo" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
                     </button>
                     <div class="relative">
                         <button id="profile-button-fluxo" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
@@ -2894,9 +2960,10 @@
     // Importações do Firebase SDK
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-    import { getFirestore, doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc, query, where, getDocs, getDoc, updateDoc, runTransaction, writeBatch, collectionGroup } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+    import { getFirestore, doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc, query, where, getDocs, getDoc, updateDoc, runTransaction, writeBatch, collectionGroup, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
     import { initializeFluxoDeCaixa } from './fluxo-de-caixa.js';
     import { initializeMovimentacaoBancaria } from './movimentacao-bancaria.js';
+    import { initializeNotifications } from './notifications.js';
 
     // Configuração do Firebase
     const firebaseConfig = {
@@ -2972,6 +3039,7 @@
     // --- Variáveis de estado ---
     let currentUserName = null; // To store the logged-in user's name
     let effectiveUserId = null; // To store the UID for data operations (admin's UID)
+    let notificationsUnsubscribe = null;
     let dashboardUnsubscribe = null;
     let empresasUnsubscribe = null;
     let usuariosUnsubscribe = null;
@@ -3033,6 +3101,12 @@
     const financeiroDropdownReceber = document.getElementById('financeiro-dropdown-receber');
     const financeiroNavLinkFluxo = document.getElementById('financeiro-nav-link-fluxo');
     const financeiroDropdownFluxo = document.getElementById('financeiro-dropdown-fluxo');
+
+    // --- Elementos de Notificação ---
+    const notificationSidebar = document.getElementById('notification-sidebar');
+    const closeNotificationSidebar = document.getElementById('close-notification-sidebar');
+    const notificationBellButtons = document.querySelectorAll('[id^="notification-bell-"]');
+
 
     // --- Elementos da Tela Financeiro - Contas a Pagar ---
     const despesaModal = document.getElementById('despesa-modal');
@@ -4075,6 +4149,12 @@
             servicosTableBody.dataset.listenerAttached = 'true';
         }
 
+        // --- Listener for Notifications ---
+        const notificationsQuery = query(collection(db, 'users', userId, 'notifications'), orderBy('createdAt', 'desc'), limit(50));
+        notificationsUnsubscribe = onSnapshot(notificationsQuery, (querySnapshot) => {
+            renderNotifications(querySnapshot);
+        });
+
         // Cadastros - Funcionários
         const funcionariosQuery = query(collection(db, 'users', userId, 'funcionarios'));
         funcionariosUnsubscribe = onSnapshot(funcionariosQuery, (querySnapshot) => {
@@ -4200,6 +4280,7 @@
     }
 
     function detachListeners() {
+        if (notificationsUnsubscribe) notificationsUnsubscribe();
         if (dashboardUnsubscribe) dashboardUnsubscribe();
         if (empresasUnsubscribe) empresasUnsubscribe();
         if (usuariosUnsubscribe) usuariosUnsubscribe();
@@ -4215,6 +4296,98 @@
         if (contasBancariasDropdownUnsubscribe) contasBancariasDropdownUnsubscribe();
         if (despesasUnsubscribe) despesasUnsubscribe();
         if (receitasUnsubscribe) receitasUnsubscribe();
+    }
+
+    function formatTimeAgo(timestamp) {
+        if (!timestamp) return 'agora mesmo';
+        const notificationTime = timestamp.toDate();
+        const now = new Date();
+        const seconds = Math.floor((now - notificationTime) / 1000);
+
+        let interval = seconds / 31536000;
+        if (interval > 1) return Math.floor(interval) + " anos atrás";
+        interval = seconds / 2592000;
+        if (interval > 1) return Math.floor(interval) + " meses atrás";
+        interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + " dias atrás";
+        interval = seconds / 3600;
+        if (interval > 1) return Math.floor(interval) + " horas atrás";
+        interval = seconds / 60;
+        if (interval > 1) return Math.floor(interval) + " minutos atrás";
+        return "agora mesmo";
+    }
+
+    function renderNotifications(docs) {
+        const notificationList = document.getElementById('notification-list');
+        const notificationIndicators = document.querySelectorAll('[id^="notification-indicator-"]');
+
+        if (!notificationList) return;
+        notificationList.innerHTML = ''; // Clear current list
+
+        if (docs.empty) {
+            notificationList.innerHTML = `
+                <div class="text-center text-gray-500 pt-8">
+                    <span class="material-symbols-outlined text-4xl text-gray-400">notifications_off</span>
+                    <p class="mt-2">Não há notificações no momento.</p>
+                </div>`;
+            notificationIndicators.forEach(indicator => indicator.classList.add('hidden'));
+            return;
+        }
+
+        let unreadCount = 0;
+        docs.forEach(doc => {
+            const notification = doc.data();
+            if (!notification.read) {
+                unreadCount++;
+            }
+
+            const timeAgo = formatTimeAgo(notification.createdAt);
+
+            const item = document.createElement('a');
+            item.href = "#";
+            item.className = `notification-item hover:bg-gray-50 ${!notification.read ? 'bg-blue-50' : ''}`;
+            item.dataset.id = doc.id;
+            item.dataset.link = notification.link;
+
+            item.innerHTML = `
+                <div class="notification-icon ${notification.iconClass || 'notification-icon-info'}">
+                    <span class="material-symbols-outlined">${notification.icon || 'notifications'}</span>
+                </div>
+                <div class="notification-content">
+                    <p class="notification-text">${notification.message}</p>
+                    <p class="notification-time">${timeAgo}</p>
+                </div>
+            `;
+            notificationList.appendChild(item);
+        });
+
+        if (unreadCount > 0) {
+            notificationIndicators.forEach(indicator => indicator.classList.remove('hidden'));
+        } else {
+            notificationIndicators.forEach(indicator => indicator.classList.add('hidden'));
+        }
+    }
+
+    async function markNotificationsAsRead() {
+        const userId = effectiveUserId;
+        if (!userId) return;
+
+        const notificationsRef = collection(db, 'users', userId, 'notifications');
+        const q = query(notificationsRef, where("read", "==", false));
+
+        try {
+            const snapshot = await getDocs(q);
+            if (snapshot.empty) return;
+
+            const batch = writeBatch(db);
+            snapshot.forEach(doc => {
+                batch.update(doc.ref, { read: true });
+            });
+            await batch.commit();
+            console.log("Notifications marked as read.");
+        } catch (error) {
+            console.error("Error marking notifications as read:", error);
+        }
     }
 
     function populatePlanoContasDropdown(selectElement, contas, aplicavelEmContext, allowedTipos) {
@@ -4584,6 +4757,7 @@
 
             updateUiForUser(currentUserName);
             setupListeners(effectiveUserId);
+            initializeNotifications(db, effectiveUserId);
             initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
             initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
             showView('main-page');
@@ -4603,6 +4777,7 @@
 
                 updateUiForUser(currentUserName);
                 setupListeners(effectiveUserId);
+                initializeNotifications(db, effectiveUserId);
                 initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
                 initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
                 showView('main-page');
@@ -4649,6 +4824,7 @@
           detachListeners();
           updateUiForUser(currentUserName);
           setupListeners(effectiveUserId); // Use a mock UID
+          initializeNotifications(db, effectiveUserId); // Initialize notifications for the test user
           adminLoginModal.classList.add('hidden');
           showView('main-page');
           updateStatusFilterUI();
@@ -4788,6 +4964,7 @@
             userEmailContasSpan.textContent = currentUserName;
 
             setupListeners(effectiveUserId);
+            initializeNotifications(db, effectiveUserId);
             showView('main-page');
 
         } catch (error) {
@@ -7026,6 +7203,33 @@
         document.getElementById('confirmar-parcial-btn').addEventListener('click', prosseguirComPagamento);
     }
 
+    // --- Lógica da Sidebar de Notificação ---
+    function toggleNotificationSidebar() {
+        const isVisible = notificationSidebar.classList.toggle('visible');
+        if (isVisible) {
+            markNotificationsAsRead();
+        }
+    }
+
+    if (notificationBellButtons.length > 0) {
+        notificationBellButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleNotificationSidebar();
+            });
+        });
+    }
+
+    if (closeNotificationSidebar) {
+        closeNotificationSidebar.addEventListener('click', toggleNotificationSidebar);
+    }
+
+    window.addEventListener('click', (e) => {
+        if (notificationSidebar.classList.contains('visible') && !notificationSidebar.contains(e.target) && ![...notificationBellButtons].some(btn => btn.contains(e.target))) {
+            notificationSidebar.classList.remove('visible');
+        }
+    });
+
     if(marcarPagoCheckbox) {
         marcarPagoCheckbox.addEventListener('change', () => {
             pagamentoInfo.classList.toggle('hidden', !marcarPagoCheckbox.checked);
@@ -7187,6 +7391,10 @@
             });
 
             closeModal();
+            // After successfully saving, trigger a notification check
+            if (window.testHooks && window.testHooks.checkAllNotifications) {
+                window.testHooks.checkAllNotifications();
+            }
         } catch (error) {
             console.error("Erro ao salvar despesa:", error);
             alert("Ocorreu um erro ao salvar: " + error.message);
@@ -7365,7 +7573,7 @@
     }
 
     // Expose functions for testing
-    window.testHooks = { setupListeners, auth };
+    window.testHooks = { setupListeners, auth, checkAllNotifications: () => checkAllNotifications(db, effectiveUserId) };
 
     function getSelectedReceitaIds() {
         return Array.from(receitasTableBody.querySelectorAll('.receita-checkbox:checked')).map(cb => cb.dataset.id);
