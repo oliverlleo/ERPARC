@@ -2980,50 +2980,6 @@
   </div>
 
 
-  <!-- Modal de Lançamento de Entrada/Saída Avulsa -->
-  <div id="mov-manual-entry-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div class="relative top-20 mx-auto p-5 border w-full max-w-xl shadow-lg rounded-md bg-white">
-          <div class="flex justify-between items-center border-b pb-3">
-              <h3 id="mov-manual-entry-title" class="text-2xl font-bold text-gray-900">Nova Entrada Avulsa</h3>
-              <button id="close-mov-manual-entry-modal-btn" class="p-2 rounded-full hover:bg-gray-200 transition-colors">
-                  <span class="material-symbols-outlined text-gray-600">close</span>
-              </button>
-          </div>
-          <div class="mt-5">
-              <form id="mov-manual-entry-form" class="space-y-6">
-                  <input type="hidden" id="mov-manual-entry-type">
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                          <label for="mov-manual-entry-data" class="block text-sm font-medium text-gray-700">Data da Transação</label>
-                          <input type="date" id="mov-manual-entry-data" class="form-input mt-1 block w-full" required>
-                      </div>
-                      <div>
-                          <label for="mov-manual-entry-valor" class="block text-sm font-medium text-gray-700">Valor (R$)</label>
-                          <input type="text" id="mov-manual-entry-valor" class="form-input mt-1 block w-full" required placeholder="0,00">
-                      </div>
-                  </div>
-                  <div>
-                      <label for="mov-manual-entry-descricao" class="block text-sm font-medium text-gray-700">Descrição</label>
-                      <input type="text" id="mov-manual-entry-descricao" class="form-input mt-1 block w-full" required placeholder="Ex: Aporte de capital do sócio">
-                  </div>
-                  <div>
-                      <label for="mov-manual-entry-plano-contas" class="block text-sm font-medium text-gray-700">Plano de Contas</label>
-                      <select id="mov-manual-entry-plano-contas" class="form-select mt-1 block w-full" required>
-                          <option value="">Selecione uma categoria...</option>
-                          <!-- Options populated by JS -->
-                      </select>
-                  </div>
-                   <div id="mov-manual-entry-form-feedback" class="text-sm mt-4"></div>
-                  <div class="flex items-center justify-end pt-4 border-t space-x-4">
-                      <button type="button" id="cancel-mov-manual-entry-modal-btn" class="bg-gray-200 text-gray-800 hover:bg-gray-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center">Cancelar</button>
-                      <button type="submit" id="submit-mov-manual-entry-btn" class="text-white bg-[var(--primary-color)] hover:bg-blue-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center">Salvar Lançamento</button>
-                  </div>
-              </form>
-          </div>
-      </div>
-  </div>
-
-
   <!-- Modal de Troca de Senha Obrigatória -->
     <div id="change-password-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full z-50">
         <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
@@ -3055,7 +3011,6 @@
 
 
   <script type="module" src="fluxo-de-caixa.js"></script>
-  <script type="module" src="movimentacao-bancaria.js"></script>
   <script type="module" src="movimentacao-bancaria.js"></script>
   <script type="module">
     // Importações do Firebase SDK
