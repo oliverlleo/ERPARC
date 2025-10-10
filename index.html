@@ -7391,10 +7391,6 @@
             });
 
             closeModal();
-            // After successfully saving, trigger a notification check
-            if (window.testHooks && window.testHooks.checkAllNotifications) {
-                window.testHooks.checkAllNotifications();
-            }
         } catch (error) {
             console.error("Erro ao salvar despesa:", error);
             alert("Ocorreu um erro ao salvar: " + error.message);
