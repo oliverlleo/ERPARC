@@ -42,9 +42,14 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     const whatIfDespesaForm = document.getElementById('what-if-despesa-form');
     const whatIfItemsContainer = document.getElementById('what-if-items-container');
     const whatIfClearScenarioBtn = document.getElementById('what-if-clear-scenario-btn');
+    const whatIfSaveScenarioBtn = document.getElementById('what-if-save-scenario-btn');
+    const cenariosSalvosList = document.getElementById('cenarios-salvos-list');
     const whatIfSaldoInicialEl = document.getElementById('what-if-saldo-inicial');
     const whatIfSaldoProjetadoEl = document.getElementById('what-if-saldo-projetado');
     const whatIfSaldoSimuladoEl = document.getElementById('what-if-saldo-simulado');
+    const whatIfSaldoComparadoEl = document.getElementById('what-if-saldo-comparado');
+    let savedScenarios = [];
+    let comparisonScenario = null;
 
 
     // --- Utility Functions (from common) ---
@@ -192,22 +197,34 @@ export function initializeFluxoDeCaixa(db, userId, common) {
 
             // Add What-If scenario transactions
             const simulatedTransactions = whatIfScenario.map(item => ({
-                id: item.id,
-                isProjected: true, // Treat them as projected for styling and logic
-                isSimulated: true, // Custom flag for What-If
-                data: item.data,
+                ...item,
+                isProjected: true,
+                isSimulated: true,
+                isComparison: false,
                 descricao: `(Simulado) ${item.descricao}`,
                 participante: 'Simulação',
                 planoDeConta: 'Simulação',
                 dataVencimento: item.data,
                 entrada: item.type === 'receita' ? item.valor : 0,
                 saida: item.type === 'despesa' ? item.valor : 0,
-                juros: 0,
-                desconto: 0,
-                conciliado: false,
-                type: `simulacao_${item.type}`
             }));
             unifiedTransactions.push(...simulatedTransactions);
+
+            if (comparisonScenario) {
+                const comparisonTransactions = comparisonScenario.map(item => ({
+                    ...item,
+                    isProjected: true,
+                    isSimulated: true,
+                    isComparison: true,
+                    descricao: `(Comparado) ${item.descricao}`,
+                    participante: 'Comparação',
+                    planoDeConta: 'Comparação',
+                    dataVencimento: item.data,
+                    entrada: item.type === 'receita' ? item.valor : 0,
+                    saida: item.type === 'despesa' ? item.valor : 0,
+                }));
+                unifiedTransactions.push(...comparisonTransactions);
+            }
 
             unifiedTransactions.sort((a, b) => new Date(a.data) - new Date(b.data));
 
@@ -589,8 +606,10 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         const whatIfData = processWhatIfEvolucaoSaldoData(transactions, saldoAnterior);
         renderWhatIfEvolucaoSaldoChart(whatIfData);
         whatIfSaldoInicialEl.textContent = formatCurrency(saldoAnterior);
-        whatIfSaldoProjetadoEl.textContent = formatCurrency(whatIfData.projetadoData[whatIfData.projetadoData.length - 1] * 100);
-        whatIfSaldoSimuladoEl.textContent = formatCurrency(whatIfData.simuladoData[whatIfData.simuladoData.length - 1] * 100);
+        whatIfSaldoProjetadoEl.textContent = formatCurrency(whatIfData.projetadoData.length > 0 ? whatIfData.projetadoData[whatIfData.projetadoData.length - 1] * 100 : saldoAnterior);
+        whatIfSaldoSimuladoEl.textContent = formatCurrency(whatIfData.simuladoData.length > 0 ? whatIfData.simuladoData[whatIfData.simuladoData.length - 1] * 100 : saldoAnterior);
+        whatIfSaldoComparadoEl.textContent = formatCurrency(whatIfData.comparadoData.length > 0 ? whatIfData.comparadoData[whatIfData.comparadoData.length - 1] * 100 : 0);
+        whatIfSaldoComparadoEl.parentElement.classList.toggle('hidden', !comparisonScenario);
     }
 
     // --- Data Processing Functions ---
@@ -599,9 +618,11 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         transactions.forEach(t => {
             const day = t.data;
             if (!dailyData[day]) {
-                dailyData[day] = { realizado: 0, projetado: 0, simulado: 0 };
+                dailyData[day] = { realizado: 0, projetado: 0, simulado: 0, comparado: 0 };
             }
-            if (t.isSimulated) {
+            if (t.isComparison) {
+                dailyData[day].comparado += (t.entrada - t.saida);
+            } else if (t.isSimulated) {
                 dailyData[day].simulado += (t.entrada - t.saida);
             } else if (t.isProjected) {
                 dailyData[day].projetado += (t.entrada - t.saida);
@@ -615,10 +636,12 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         const realizadoData = [];
         const projetadoData = [];
         const simuladoData = [];
+        const comparadoData = [];
 
         let saldoRealizado = saldoAnterior;
         let saldoProjetado = saldoAnterior;
         let saldoSimulado = saldoAnterior;
+        let saldoComparado = saldoAnterior;
         let lastRealizedDayIndex = -1;
 
         sortedDays.forEach((day, index) => {
@@ -627,6 +650,8 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             saldoRealizado += dailyData[day].realizado;
             saldoProjetado = saldoRealizado + dailyData[day].projetado;
             saldoSimulado = saldoProjetado + dailyData[day].simulado;
+            saldoComparado = saldoProjetado + dailyData[day].comparado;
+
 
             if (dailyData[day].realizado !== 0) {
                  lastRealizedDayIndex = index;
@@ -635,22 +660,8 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             realizadoData.push(saldoRealizado / 100);
             projetadoData.push(saldoProjetado / 100);
             simuladoData.push(saldoSimulado / 100);
+            comparadoData.push(saldoComparado / 100);
         });
-
-        // Ensure the lines connect properly
-        for (let i = 0; i < sortedDays.length; i++) {
-            if (i > 0) {
-                if (dailyData[sortedDays[i]].realizado === 0) {
-                    realizadoData[i] = realizadoData[i-1];
-                }
-                 if (dailyData[sortedDays[i]].projetado === 0) {
-                    projetadoData[i] = projetadoData[i-1] + (dailyData[sortedDays[i]].realizado / 100);
-                }
-                 if (dailyData[sortedDays[i]].simulado === 0) {
-                    simuladoData[i] = simuladoData[i-1] + ((dailyData[sortedDays[i]].realizado + dailyData[sortedDays[i]].projetado) / 100)
-                }
-            }
-        }
 
         // After the last realized day, the "realizado" line should be flat.
         if (lastRealizedDayIndex > -1) {
@@ -659,7 +670,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             }
         }
 
-        return { labels, realizadoData, projetadoData, simuladoData, lastRealizedDayIndex };
+        return { labels, realizadoData, projetadoData, simuladoData, comparadoData, lastRealizedDayIndex };
     }
     function processReceitaVsDespesaData(transactions) {
         const monthlyData = {};
@@ -864,7 +875,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     }
 
     // --- Chart Rendering Functions ---
-    function renderWhatIfEvolucaoSaldoChart({ labels, realizadoData, projetadoData, simuladoData, lastRealizedDayIndex }) {
+    function renderWhatIfEvolucaoSaldoChart({ labels, realizadoData, projetadoData, simuladoData, comparadoData, lastRealizedDayIndex }) {
         const ctx = document.getElementById('chart-what-if-evolucao-saldo')?.getContext('2d');
         if (!ctx) return;
 
@@ -872,38 +883,52 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             chartInstances.whatIfEvolucaoSaldo.destroy();
         }
 
+        const datasets = [
+            {
+                label: 'Saldo Realizado',
+                data: realizadoData,
+                borderColor: 'rgba(54, 162, 235, 1)',
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                fill: false,
+                tension: 0.1
+            },
+            {
+                label: 'Projeção Base',
+                data: projetadoData,
+                borderColor: 'rgba(255, 159, 64, 1)',
+                borderDash: [5, 5],
+                backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                fill: false,
+                tension: 0.1
+            },
+            {
+                label: 'Projeção Simulada',
+                data: simuladoData,
+                borderColor: 'rgba(75, 192, 192, 1)',
+                 borderDash: [5, 5],
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                fill: false,
+                tension: 0.1
+            }
+        ];
+
+        if (comparisonScenario) {
+            datasets.push({
+                label: 'Projeção Comparada',
+                data: comparadoData,
+                borderColor: 'rgba(153, 102, 255, 1)',
+                borderDash: [5, 5],
+                backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                fill: false,
+                tension: 0.1
+            });
+        }
+
         chartInstances.whatIfEvolucaoSaldo = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: labels,
-                datasets: [
-                    {
-                        label: 'Saldo Realizado',
-                        data: realizadoData,
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                        fill: false,
-                        tension: 0.1
-                    },
-                    {
-                        label: 'Projeção Base',
-                        data: projetadoData,
-                        borderColor: 'rgba(255, 159, 64, 1)',
-                        borderDash: [5, 5],
-                        backgroundColor: 'rgba(255, 159, 64, 0.2)',
-                        fill: false,
-                        tension: 0.1
-                    },
-                    {
-                        label: 'Projeção Simulada',
-                        data: simuladoData,
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                         borderDash: [5, 5],
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        fill: false,
-                        tension: 0.1
-                    }
-                ]
+                datasets: datasets
             },
             options: {
                 responsive: true,
@@ -1372,26 +1397,73 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     function handleWhatIfFormSubmit(event) {
         event.preventDefault();
         const form = event.target;
-        const isReceita = form.id === 'what-if-receita-form';
+        const isReceita = form.id.includes('receita');
+        const type = isReceita ? 'receita' : 'despesa';
 
-        const descricao = form.querySelector('input[type="text"]').value;
-        const valor = toCents(form.querySelector('input[placeholder*="00"]').value);
-        const data = form.querySelector('input[type="date"]').value;
+        const descricao = form.querySelector(`#what-if-${type}-descricao`).value;
+        const valorTotal = toCents(form.querySelector(`#what-if-${type}-valor`).value);
+        const dataInicio = form.querySelector(`#what-if-${type}-data`).value;
+        const formaPagamento = form.querySelector(`#what-if-${type}-forma-pagamento`).value;
 
-        if (!descricao || !valor || !data) {
-            alert("Por favor, preencha todos os campos para a simulação.");
+        if (!descricao || !valorTotal || !dataInicio) {
+            alert("Por favor, preencha Descrição, Valor e Data de Início.");
             return;
         }
 
-        whatIfScenario.push({
-            id: `what-if-${Date.now()}`,
-            type: isReceita ? 'receita' : 'despesa',
-            descricao,
-            data,
-            valor,
-        });
+        const baseId = `what-if-${Date.now()}`;
+        let transactionsToAdd = [];
 
+        if (formaPagamento === 'single') {
+            transactionsToAdd.push({
+                id: baseId,
+                type: type,
+                descricao: descricao,
+                data: dataInicio,
+                valor: valorTotal,
+                groupId: baseId
+            });
+        } else if (formaPagamento === 'installment') {
+            const numParcelas = parseInt(form.querySelector(`#what-if-${type}-installments`).value, 10);
+            if (!numParcelas || numParcelas <= 0) { alert("Número de parcelas inválido."); return; }
+
+            const valorParcela = Math.round(valorTotal / numParcelas);
+            for (let i = 0; i < numParcelas; i++) {
+                const dataParcela = new Date(dataInicio + 'T00:00:00');
+                dataParcela.setMonth(dataParcela.getMonth() + i);
+                transactionsToAdd.push({
+                    id: `${baseId}-${i}`,
+                    type: type,
+                    descricao: `${descricao} (Parcela ${i + 1}/${numParcelas})`,
+                    data: dataParcela.toISOString().split('T')[0],
+                    valor: valorParcela,
+                    groupId: baseId
+                });
+            }
+        } else if (formaPagamento === 'recurring') {
+            const numRecorrencias = parseInt(form.querySelector(`#what-if-${type}-recurrences`).value, 10);
+            if (!numRecorrencias || numRecorrencias <= 0) { alert("Número de ocorrências inválido."); return; }
+
+            const frequencia = form.querySelector(`#what-if-${type}-recurring-frequency`).value;
+            const multiplier = getRecurrenceMultiplier(frequencia);
+
+            for (let i = 0; i < numRecorrencias; i++) {
+                const dataRecorrencia = new Date(dataInicio + 'T00:00:00');
+                dataRecorrencia.setMonth(dataRecorrencia.getMonth() + (i * multiplier));
+                transactionsToAdd.push({
+                    id: `${baseId}-${i}`,
+                    type: type,
+                    descricao: `${descricao} (Recorrência ${i + 1}/${numRecorrencias})`,
+                    data: dataRecorrencia.toISOString().split('T')[0],
+                    valor: valorTotal, // For recurring, the value is per occurrence
+                    groupId: baseId
+                });
+            }
+        }
+
+        whatIfScenario.push(...transactionsToAdd);
         form.reset();
+        // Manually trigger change to hide conditional fields again
+        form.querySelector('select[id*="forma-pagamento"]').dispatchEvent(new Event('change'));
         renderWhatIfItems();
         calculateAndRenderCashFlow();
     }
@@ -1435,6 +1507,100 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         renderWhatIfItems();
         calculateAndRenderCashFlow();
     });
+
+    whatIfSaveScenarioBtn.addEventListener('click', () => {
+        const scenarioName = prompt("Digite um nome para este cenário:", "Cenário Salvo");
+        if (scenarioName && whatIfScenario.length > 0) {
+            savedScenarios.push({
+                id: `saved-${Date.now()}`,
+                name: scenarioName,
+                transactions: JSON.parse(JSON.stringify(whatIfScenario)) // Deep copy
+            });
+            renderSavedScenarios();
+        }
+    });
+
+    function renderSavedScenarios() {
+        cenariosSalvosList.innerHTML = '';
+        if (savedScenarios.length === 0) {
+            cenariosSalvosList.innerHTML = '<p class="text-center text-gray-500">Nenhum cenário salvo ainda.</p>';
+            return;
+        }
+
+        savedScenarios.forEach(scenario => {
+            const scenarioEl = document.createElement('div');
+            scenarioEl.className = 'flex justify-between items-center p-2 rounded-md bg-gray-50';
+            scenarioEl.innerHTML = `
+                <span class="font-medium text-gray-700">${scenario.name}</span>
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" class="form-checkbox h-4 w-4 text-purple-600 what-if-compare-checkbox" data-scenario-id="${scenario.id}">
+                    <label class="text-sm text-gray-600">Comparar</label>
+                    <button class="text-sm text-blue-600 hover:underline what-if-load-btn" data-scenario-id="${scenario.id}">Carregar</button>
+                    <button class="text-sm text-red-600 hover:underline what-if-delete-btn" data-scenario-id="${scenario.id}">Excluir</button>
+                </div>
+            `;
+            cenariosSalvosList.appendChild(scenarioEl);
+        });
+    }
+
+    cenariosSalvosList.addEventListener('click', (e) => {
+        const target = e.target;
+        const scenarioId = target.dataset.scenarioId;
+        if (!scenarioId) return;
+
+        if (target.classList.contains('what-if-load-btn')) {
+            const scenarioToLoad = savedScenarios.find(s => s.id === scenarioId);
+            if (scenarioToLoad) {
+                whatIfScenario = JSON.parse(JSON.stringify(scenarioToLoad.transactions));
+                renderWhatIfItems();
+                calculateAndRenderCashFlow();
+            }
+        } else if (target.classList.contains('what-if-delete-btn')) {
+            savedScenarios = savedScenarios.filter(s => s.id !== scenarioId);
+            renderSavedScenarios();
+        } else if (target.classList.contains('what-if-compare-checkbox')) {
+            const checkbox = target;
+            document.querySelectorAll('.what-if-compare-checkbox').forEach(cb => {
+                if (cb !== checkbox) cb.checked = false;
+            });
+
+            if (checkbox.checked) {
+                const scenarioToCompare = savedScenarios.find(s => s.id === scenarioId);
+                comparisonScenario = scenarioToCompare ? scenarioToCompare.transactions : null;
+            } else {
+                comparisonScenario = null;
+            }
+            calculateAndRenderCashFlow();
+        }
+    });
+
+    function getRecurrenceMultiplier(freq) {
+        switch (freq) {
+            case 'bimestral': return 2;
+            case 'trimestral': return 3;
+            case 'semestral': return 6;
+            case 'anual': return 12;
+            default: return 1; // mensal
+        }
+    }
+
+    function setupWhatIfFormListeners(formId) {
+        const form = document.getElementById(formId);
+        if (!form) return;
+
+        const formaPagamentoSelect = form.querySelector('select[id*="forma-pagamento"]');
+        const installmentFields = form.querySelector('div[id*="installment-fields"]');
+        const recurringFields = form.querySelector('div[id*="recurring-fields"]');
+
+        formaPagamentoSelect.addEventListener('change', () => {
+            const selection = formaPagamentoSelect.value;
+            if(installmentFields) installmentFields.classList.toggle('hidden', selection !== 'installment');
+            if(recurringFields) recurringFields.classList.toggle('hidden', selection !== 'recurring');
+        });
+    }
+
+    setupWhatIfFormListeners('what-if-receita-form');
+    setupWhatIfFormListeners('what-if-despesa-form');
 
     // --- Initial Load ---
     function setDefaultDates() {

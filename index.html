@@ -2607,7 +2607,7 @@
                                             <div class="mt-4">
                                                 <canvas id="chart-what-if-evolucao-saldo"></canvas>
                                             </div>
-                                            <div class="mt-6 grid grid-cols-3 gap-4 text-center">
+                                            <div class="mt-6 grid grid-cols-4 gap-4 text-center">
                                                 <div>
                                                     <p class="text-sm text-gray-500">Saldo Inicial</p>
                                                     <p id="what-if-saldo-inicial" class="text-lg font-bold text-gray-800">R$ 0,00</p>
@@ -2620,6 +2620,10 @@
                                                     <p class="text-sm text-gray-500">Saldo Simulado</p>
                                                     <p id="what-if-saldo-simulado" class="text-lg font-bold text-green-600">R$ 0,00</p>
                                                 </div>
+                                                <div>
+                                                    <p class="text-sm text-gray-500">Saldo Comparado</p>
+                                                    <p id="what-if-saldo-comparado" class="text-lg font-bold text-purple-600">R$ 0,00</p>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -2627,7 +2631,17 @@
                                         <div class="p-6 border rounded-lg shadow-sm bg-white">
                                             <h4 class="text-xl font-semibold text-gray-800 mb-4">Cenários Salvos</h4>
                                             <div id="cenarios-salvos-list" class="space-y-2">
-                                                <p class="text-center text-gray-500">Nenhum cenário salvo ainda.</p>
+                                                <!-- Scenarios will be rendered here by JS -->
+                                                <div class="flex justify-between items-center p-2 rounded-md bg-gray-50">
+                                                    <span class="font-medium text-gray-700">Exemplo: Contratação de 2 Devs</span>
+                                                    <div class="flex items-center space-x-2">
+                                                        <input type="checkbox" class="form-checkbox h-4 w-4 text-purple-600 what-if-compare-checkbox" data-scenario-id="exemplo1">
+                                                        <label class="text-sm text-gray-600">Comparar</label>
+                                                        <button class="text-sm text-blue-600 hover:underline">Carregar</button>
+                                                        <button class="text-sm text-red-600 hover:underline">Excluir</button>
+                                                    </div>
+                                                </div>
+                                                <p class="text-center text-gray-500 hidden">Nenhum cenário salvo ainda.</p>
                                             </div>
                                         </div>
                                     </div>
@@ -2649,9 +2663,46 @@
                                                     <input type="text" id="what-if-receita-valor" class="form-input mt-1 block w-full" placeholder="5000">
                                                 </div>
                                                 <div>
-                                                    <label for="what-if-receita-data" class="block text-sm font-medium text-gray-700">Data</label>
-                                                    <input type="date" id="what-if-receita-data" class="form-input mt-1 block w-full">
+                                                    <label for="what-if-receita-forma-pagamento" class="block text-sm font-medium text-gray-700">Forma</label>
+                                                    <select id="what-if-receita-forma-pagamento" class="form-select mt-1 block w-full">
+                                                        <option value="single">Única</option>
+                                                        <option value="installment">Parcelado</option>
+                                                        <option value="recurring">Recorrente</option>
+                                                    </select>
                                                 </div>
+                                            </div>
+                                            <div id="what-if-receita-installment-fields" class="hidden grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label for="what-if-receita-installments" class="block text-sm font-medium text-gray-700">Parcelas</label>
+                                                    <input type="number" id="what-if-receita-installments" class="form-input mt-1 block w-full" placeholder="3">
+                                                </div>
+                                                <div>
+                                                    <label for="what-if-receita-installment-interval" class="block text-sm font-medium text-gray-700">Intervalo</label>
+                                                    <select id="what-if-receita-installment-interval" class="form-select mt-1 block w-full">
+                                                        <option value="30">30 dias</option>
+                                                        <option value="mensal">Mensal</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div id="what-if-receita-recurring-fields" class="hidden grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label for="what-if-receita-recurrences" class="block text-sm font-medium text-gray-700">Ocorrências</label>
+                                                    <input type="number" id="what-if-receita-recurrences" class="form-input mt-1 block w-full" placeholder="12">
+                                                </div>
+                                                <div>
+                                                    <label for="what-if-receita-recurring-frequency" class="block text-sm font-medium text-gray-700">Frequência</label>
+                                                    <select id="what-if-receita-recurring-frequency" class="form-select mt-1 block w-full">
+                                                        <option value="mensal">Mensal</option>
+                                                        <option value="bimestral">Bimestral</option>
+                                                        <option value="trimestral">Trimestral</option>
+                                                        <option value="semestral">Semestral</option>
+                                                        <option value="anual">Anual</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label for="what-if-receita-data" class="block text-sm font-medium text-gray-700">Data de Início</label>
+                                                <input type="date" id="what-if-receita-data" class="form-input mt-1 block w-full">
                                             </div>
                                             <button type="submit" class="w-full inline-flex items-center justify-center rounded-md bg-green-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-600">
                                                 <span class="material-symbols-outlined mr-2">add</span> Adicionar Receita
@@ -2665,15 +2716,52 @@
                                                 <label for="what-if-despesa-descricao" class="block text-sm font-medium text-gray-700">Descrição</label>
                                                 <input type="text" id="what-if-despesa-descricao" class="form-input mt-1 block w-full" placeholder="Ex: Salário Dev Jr.">
                                             </div>
-                                            <div class="grid grid-cols-2 gap-4">
+                                             <div class="grid grid-cols-2 gap-4">
                                                 <div>
                                                     <label for="what-if-despesa-valor" class="block text-sm font-medium text-gray-700">Valor (R$)</label>
                                                     <input type="text" id="what-if-despesa-valor" class="form-input mt-1 block w-full" placeholder="3500">
                                                 </div>
                                                 <div>
-                                                    <label for="what-if-despesa-data" class="block text-sm font-medium text-gray-700">Data</label>
-                                                    <input type="date" id="what-if-despesa-data" class="form-input mt-1 block w-full">
+                                                    <label for="what-if-despesa-forma-pagamento" class="block text-sm font-medium text-gray-700">Forma</label>
+                                                    <select id="what-if-despesa-forma-pagamento" class="form-select mt-1 block w-full">
+                                                        <option value="single">Única</option>
+                                                        <option value="installment">Parcelado</option>
+                                                        <option value="recurring">Recorrente</option>
+                                                    </select>
                                                 </div>
+                                            </div>
+                                            <div id="what-if-despesa-installment-fields" class="hidden grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label for="what-if-despesa-installments" class="block text-sm font-medium text-gray-700">Parcelas</label>
+                                                    <input type="number" id="what-if-despesa-installments" class="form-input mt-1 block w-full" placeholder="3">
+                                                </div>
+                                                <div>
+                                                    <label for="what-if-despesa-installment-interval" class="block text-sm font-medium text-gray-700">Intervalo</label>
+                                                    <select id="what-if-despesa-installment-interval" class="form-select mt-1 block w-full">
+                                                        <option value="30">30 dias</option>
+                                                        <option value="mensal">Mensal</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div id="what-if-despesa-recurring-fields" class="hidden grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label for="what-if-despesa-recurrences" class="block text-sm font-medium text-gray-700">Ocorrências</label>
+                                                    <input type="number" id="what-if-despesa-recurrences" class="form-input mt-1 block w-full" placeholder="12">
+                                                </div>
+                                                <div>
+                                                    <label for="what-if-despesa-recurring-frequency" class="block text-sm font-medium text-gray-700">Frequência</label>
+                                                    <select id="what-if-despesa-recurring-frequency" class="form-select mt-1 block w-full">
+                                                        <option value="mensal">Mensal</option>
+                                                        <option value="bimestral">Bimestral</option>
+                                                        <option value="trimestral">Trimestral</option>
+                                                        <option value="semestral">Semestral</option>
+                                                        <option value="anual">Anual</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label for="what-if-despesa-data" class="block text-sm font-medium text-gray-700">Data de Início</label>
+                                                <input type="date" id="what-if-despesa-data" class="form-input mt-1 block w-full">
                                             </div>
                                             <button type="submit" class="w-full inline-flex items-center justify-center rounded-md bg-red-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-red-600">
                                                  <span class="material-symbols-outlined mr-2">remove</span> Adicionar Despesa
