@@ -39,32 +39,39 @@ async function createNotification(db, userId, notificationData) {
 }
 
 /**
- * Checks all unpaid bills and creates notifications for items due today, overdue, or due soon.
- * This function uses client-side filtering to avoid complex Firestore indexes.
+ * Checks for upcoming and overdue bills to pay and creates notifications.
+ * This function uses targeted queries to remain efficient.
  * @param {object} db - The Firestore database instance.
  * @param {string} userId - The ID of the user.
  */
 async function checkContasAPagar(db, userId) {
     const despesasRef = collection(db, 'users', userId, 'despesas');
-    // Simplified query to get all potentially relevant bills.
-    const q = query(despesasRef, where("status", "in", ["Pendente", "Pago Parcialmente", "Vencido"]));
-
-    const querySnapshot = await getDocs(q);
-
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize today's date
+    today.setHours(0, 0, 0, 0);
 
-    querySnapshot.forEach(doc => {
+    const in3Days = new Date(today);
+    in3Days.setDate(today.getDate() + 3);
+
+    const todayStr = today.toISOString().split('T')[0];
+    const in3DaysStr = in3Days.toISOString().split('T')[0];
+
+    // Query 1: For items due soon or today
+    const qDueSoon = query(despesasRef, where("vencimento", ">=", todayStr), where("vencimento", "<=", in3DaysStr));
+    const dueSoonSnapshot = await getDocs(qDueSoon);
+    const relevantStatuses = new Set(["Pendente", "Pago Parcialmente"]);
+
+    dueSoonSnapshot.forEach(doc => {
         const despesa = doc.data();
-        if (!despesa.vencimento) return; // Skip if no due date
+        if (!relevantStatuses.has(despesa.status)) {
+            return;
+        }
 
         const vencimentoDate = new Date(despesa.vencimento + 'T00:00:00');
         const diffTime = vencimentoDate.getTime() - today.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         const valor = despesa.valorSaldo ?? despesa.valorOriginal ?? 0;
 
-        if (diffDays === 0) {
-            // Due Today
+        if (diffDays === 0) { // Due Today
             createNotification(db, userId, {
                 relatedId: doc.id,
                 type: 'alerta_vencimento_hoje_pagar',
@@ -73,18 +80,7 @@ async function checkContasAPagar(db, userId) {
                 message: `A conta de "${despesa.favorecidoNome}" no valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor / 100)} vence HOJE.`,
                 link: `contas-a-pagar-page`
             });
-        } else if (diffDays < 0) {
-            // Overdue
-            createNotification(db, userId, {
-                relatedId: doc.id,
-                type: 'alerta_atraso_pagar',
-                icon: 'error',
-                iconClass: 'notification-icon-danger',
-                message: `A conta de "${despesa.favorecidoNome}" no valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor / 100)} venceu.`,
-                link: `contas-a-pagar-page`
-            });
-        } else if (diffDays > 0 && diffDays <= 3) {
-            // Due Soon
+        } else { // Due Soon (1-3 days)
             createNotification(db, userId, {
                 relatedId: doc.id,
                 type: 'aviso_vencimento_pagar',
@@ -95,35 +91,60 @@ async function checkContasAPagar(db, userId) {
             });
         }
     });
+
+    // Query 2: For overdue items
+    const qOverdue = query(despesasRef, where("status", "==", "Vencido"));
+    const overdueSnapshot = await getDocs(qOverdue);
+
+    overdueSnapshot.forEach(doc => {
+        const despesa = doc.data();
+        const valor = despesa.valorSaldo ?? despesa.valorOriginal ?? 0;
+        createNotification(db, userId, {
+            relatedId: doc.id,
+            type: 'alerta_atraso_pagar',
+            icon: 'error',
+            iconClass: 'notification-icon-danger',
+            message: `A conta de "${despesa.favorecidoNome}" no valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor / 100)} venceu.`,
+            link: `contas-a-pagar-page`
+        });
+    });
 }
 
 /**
- * Checks all unpaid receivables and creates notifications for items due today, overdue, or due soon.
- * This function uses client-side filtering to avoid complex Firestore indexes.
+ * Checks for upcoming and overdue receivables and creates notifications.
+ * This function uses targeted queries to remain efficient.
  * @param {object} db - The Firestore database instance.
  * @param {string} userId - The ID of the user.
  */
 async function checkContasAReceber(db, userId) {
     const receitasRef = collection(db, 'users', userId, 'receitas');
-    // Simplified query to get all potentially relevant receivables.
-    const q = query(receitasRef, where("status", "in", ["Pendente", "Recebido Parcialmente", "Vencido"]));
-
-    const querySnapshot = await getDocs(q);
-
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize today's date
+    today.setHours(0, 0, 0, 0);
 
-    querySnapshot.forEach(doc => {
+    const in3Days = new Date(today);
+    in3Days.setDate(today.getDate() + 3);
+
+    const todayStr = today.toISOString().split('T')[0];
+    const in3DaysStr = in3Days.toISOString().split('T')[0];
+
+    const vencimentoField = "dataVencimento";
+
+    // Query 1: For items due soon or today
+    const qDueSoon = query(receitasRef, where(vencimentoField, ">=", todayStr), where(vencimentoField, "<=", in3DaysStr));
+    const dueSoonSnapshot = await getDocs(qDueSoon);
+    const relevantStatuses = new Set(["Pendente", "Recebido Parcialmente"]);
+
+    dueSoonSnapshot.forEach(doc => {
         const receita = doc.data();
-        const vencimento = receita.dataVencimento || receita.vencimento;
-        if (!vencimento) return; // Skip if no due date
+        if (!relevantStatuses.has(receita.status)) {
+            return;
+        }
 
-        const vencimentoDate = new Date(vencimento + 'T00:00:00');
+        const vencimentoDate = new Date(receita[vencimentoField] + 'T00:00:00');
         const diffTime = vencimentoDate.getTime() - today.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-        if (diffDays === 0) {
-            // Due Today
+        if (diffDays === 0) { // Due Today
             createNotification(db, userId, {
                 relatedId: doc.id,
                 type: 'alerta_vencimento_hoje_receber',
@@ -132,18 +153,7 @@ async function checkContasAReceber(db, userId) {
                 message: `Título do cliente "${receita.clienteNome}" vence HOJE.`,
                 link: `contas-a-receber-page`
             });
-        } else if (diffDays < 0) {
-            // Overdue
-            createNotification(db, userId, {
-                relatedId: doc.id,
-                type: 'alerta_atraso_receber',
-                icon: 'warning',
-                iconClass: 'notification-icon-danger',
-                message: `Título do cliente "${receita.clienteNome}" venceu. Deseja enviar um lembrete?`,
-                link: `contas-a-receber-page`
-            });
-        } else if (diffDays > 0 && diffDays <= 3) {
-            // Due Soon
+        } else { // Due Soon
             createNotification(db, userId, {
                 relatedId: doc.id,
                 type: 'aviso_vencimento_receber',
@@ -154,6 +164,22 @@ async function checkContasAReceber(db, userId) {
             });
         }
     });
+
+    // Query 2: For overdue items
+    const qOverdue = query(receitasRef, where("status", "==", "Vencido"));
+    const overdueSnapshot = await getDocs(qOverdue);
+
+    overdueSnapshot.forEach(doc => {
+        const receita = doc.data();
+        createNotification(db, userId, {
+            relatedId: doc.id,
+            type: 'alerta_atraso_receber',
+            icon: 'warning',
+            iconClass: 'notification-icon-danger',
+            message: `Título do cliente "${receita.clienteNome}" venceu. Deseja enviar um lembrete?`,
+            link: `contas-a-receber-page`
+        });
+    });
 }
 
 /**
@@ -162,7 +188,7 @@ async function checkContasAReceber(db, userId) {
  * @param {string} userId - The ID of the user.
  */
 function checkAllNotifications(db, userId) {
-    console.log("Checking for notifications (client-side filter method)...");
+    console.log("Checking for notifications (targeted query method)...");
     checkContasAPagar(db, userId);
     checkContasAReceber(db, userId);
 }

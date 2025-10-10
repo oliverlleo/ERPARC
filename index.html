@@ -2712,8 +2712,9 @@
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
                  <div class="flex items-center gap-4">
-                    <button class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                        <span class="material-symbols-outlined text-gray-600"> notifications </span>
+                    <button id="notification-bell-movimentacao" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-movimentacao" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
                     </button>
                     <div class="relative">
                         <button id="profile-button-movimentacao" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
@@ -7203,7 +7204,7 @@
         document.getElementById('confirmar-parcial-btn').addEventListener('click', prosseguirComPagamento);
     }
 
-    // --- Lógica da Sidebar de Notificação ---
+    // --- Lógica da Sidebar de Notificação (Event Delegation Model) ---
     function toggleNotificationSidebar() {
         const isVisible = notificationSidebar.classList.toggle('visible');
         if (isVisible) {
@@ -7211,21 +7212,16 @@
         }
     }
 
-    if (notificationBellButtons.length > 0) {
-        notificationBellButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
-                e.stopPropagation();
-                toggleNotificationSidebar();
-            });
-        });
-    }
+    document.addEventListener('click', function(e) {
+        const bellButton = e.target.closest('[id^="notification-bell-"]');
+        const closeButton = e.target.closest('#close-notification-sidebar');
+        const sidebar = e.target.closest('#notification-sidebar');
+        const isVisible = notificationSidebar.classList.contains('visible');
 
-    if (closeNotificationSidebar) {
-        closeNotificationSidebar.addEventListener('click', toggleNotificationSidebar);
-    }
-
-    window.addEventListener('click', (e) => {
-        if (notificationSidebar.classList.contains('visible') && !notificationSidebar.contains(e.target) && ![...notificationBellButtons].some(btn => btn.contains(e.target))) {
+        if (bellButton || closeButton) {
+            e.stopPropagation();
+            toggleNotificationSidebar();
+        } else if (isVisible && !sidebar) {
             notificationSidebar.classList.remove('visible');
         }
     });
@@ -7569,7 +7565,7 @@
     }
 
     // Expose functions for testing
-    window.testHooks = { setupListeners, auth, checkAllNotifications: () => checkAllNotifications(db, effectiveUserId) };
+    window.testHooks = { setupListeners, auth };
 
     function getSelectedReceitaIds() {
         return Array.from(receitasTableBody.querySelectorAll('.receita-checkbox:checked')).map(cb => cb.dataset.id);
