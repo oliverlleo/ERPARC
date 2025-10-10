@@ -48,6 +48,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     const whatIfSaldoProjetadoEl = document.getElementById('what-if-saldo-projetado');
     const whatIfSaldoSimuladoEl = document.getElementById('what-if-saldo-simulado');
     const whatIfSaldoComparadoEl = document.getElementById('what-if-saldo-comparado');
+    const whatIfIncludeProjectionsCheckbox = document.getElementById('what-if-include-projections');
     let savedScenarios = [];
     let comparisonScenario = null;
 
@@ -614,12 +615,15 @@ export function initializeFluxoDeCaixa(db, userId, common) {
 
     // --- Data Processing Functions ---
     function processWhatIfEvolucaoSaldoData(transactions, saldoAnterior) {
+        const includeProjections = whatIfIncludeProjectionsCheckbox.checked;
         const dailyData = {};
+
         transactions.forEach(t => {
             const day = t.data;
             if (!dailyData[day]) {
                 dailyData[day] = { realizado: 0, projetado: 0, simulado: 0, comparado: 0 };
             }
+
             if (t.isComparison) {
                 dailyData[day].comparado += (t.entrada - t.saida);
             } else if (t.isSimulated) {
@@ -649,9 +653,14 @@ export function initializeFluxoDeCaixa(db, userId, common) {
 
             saldoRealizado += dailyData[day].realizado;
             saldoProjetado = saldoRealizado + dailyData[day].projetado;
-            saldoSimulado = saldoProjetado + dailyData[day].simulado;
-            saldoComparado = saldoProjetado + dailyData[day].comparado;
 
+            if(includeProjections) {
+                saldoSimulado = saldoProjetado + dailyData[day].simulado;
+                saldoComparado = saldoProjetado + dailyData[day].comparado;
+            } else {
+                saldoSimulado = saldoRealizado + dailyData[day].simulado;
+                saldoComparado = saldoRealizado + dailyData[day].comparado;
+            }
 
             if (dailyData[day].realizado !== 0) {
                  lastRealizedDayIndex = index;
@@ -1310,8 +1319,8 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         }
     });
 
-    [visaoRealizadoCheckbox, visaoProjetadoCheckbox].forEach(cb => {
-        cb.addEventListener('change', calculateAndRenderCashFlow);
+    [visaoRealizadoCheckbox, visaoProjetadoCheckbox, whatIfIncludeProjectionsCheckbox].forEach(el => {
+        if(el) el.addEventListener('change', calculateAndRenderCashFlow);
     });
 
     extratoTableBody.addEventListener('change', async (e) => {
