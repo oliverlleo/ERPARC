@@ -5362,7 +5362,7 @@
             initializeNotificationsPage(db, effectiveUserId);
             initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
             initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
-            initializeRelatoriosPage(db, effectiveUserId, commonUtils);
+            initializeRelatoriosPage(db, user.uid, commonUtils);
             showView('main-page');
             updateStatusFilterUI();
             updateReceitaStatusFilterUI();
@@ -9208,8 +9208,6 @@ function validateParcelasSum() {
         // --- Elements ---
         const reportTabLinks = relatoriosPage.querySelectorAll('.report-tab-link');
         const reportTabContents = relatoriosPage.querySelectorAll('.report-tab-content');
-        let previsaoChart = null;
-        let categoriasChart = null;
 
         // --- Populate client filter dropdowns (on-demand) ---
         async function populateReportClientFilters() {
@@ -10013,7 +10011,7 @@ function validateParcelasSum() {
                 }
             });
         });
-
+    }
     // --- Lógica dos Filtros do Dashboard ---
     const cardMappings = [
         // Contas a Pagar Page
@@ -10021,17 +10019,17 @@ function validateParcelasSum() {
         { id: 'total-pago-card-container', type: 'pagoMes', target: 'contas-a-pagar-page' },
         { id: 'contas-vencidas-card-container', type: 'vencidas', target: 'contas-a-pagar-page' },
         // Main Dashboard Page - Contas a Pagar
-        { id: 'dashboard-total-a-pagar-container', type: 'aPagarMes', target: 'contas-a-pagar-page' },
-        { id: 'dashboard-total-pago-container', type: 'pagoMes', target: 'contas-a-pagar-page' },
-        { id: 'dashboard-contas-vencidas-container', type: 'vencidas', target: 'contas-a-pagar-page' },
+        { id: 'dashboard-pagar-total-mes-container', type: 'aPagarMes', target: 'contas-a-pagar-page' },
+        { id: 'dashboard-pagar-pago-mes-container', type: 'pagoMes', target: 'contas-a-pagar-page' },
+        { id: 'dashboard-pagar-vencidas-container', type: 'vencidas', target: 'contas-a-pagar-page' },
         // Contas a Receber Page
         { id: 'total-a-receber-card-container', type: 'aReceberMes', target: 'contas-a-receber-page' },
         { id: 'total-recebido-card-container', type: 'recebidoMes', target: 'contas-a-receber-page' },
         { id: 'titulos-vencidos-card-container', type: 'titulosVencidos', target: 'contas-a-receber-page' },
         // Main Dashboard Page - Contas a Receber
-        { id: 'dashboard-total-a-receber-container', type: 'aReceberMes', target: 'contas-a-receber-page' },
-        { id: 'dashboard-total-recebido-container', type: 'recebidoMes', target: 'contas-a-receber-page' },
-        { id: 'dashboard-titulos-vencidos-container', type: 'titulosVencidos', target: 'contas-a-receber-page' }
+        { id: 'dashboard-receber-total-mes-container', type: 'aReceberMes', target: 'contas-a-receber-page' },
+        { id: 'dashboard-receber-recebido-mes-container', type: 'recebidoMes', target: 'contas-a-receber-page' },
+        { id: 'dashboard-receber-vencidos-container', type: 'titulosVencidos', target: 'contas-a-receber-page' }
     ];
 
     cardMappings.forEach(mapping => {
@@ -10101,6 +10099,7 @@ function validateParcelasSum() {
             });
         }
     });
+    }
   </script>
 
 </body>
