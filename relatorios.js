@@ -41,35 +41,40 @@ export function initializeRelatorios(db, userId, common) {
     // --- Funções de Lógica de Relatório ---
 
     function processarRelatorio(tipo, filtros) {
-        // Lógica de processamento de dados conforme o tipo de relatório selecionado
+        let dadosParaRenderizar;
+
+        // Client-side filtering based on the report type
         switch (tipo) {
             case 'posicao-carteira':
-                visualizacaoArea.innerHTML = renderPosicaoCarteira(relatorioDadosBase, filtros);
+                dadosParaRenderizar = (filtros.status === 'todos')
+                    ? relatorioDadosBase
+                    : relatorioDadosBase.filter(d => d.status === filtros.status);
+                visualizacaoArea.innerHTML = renderPosicaoCarteira(dadosParaRenderizar, filtros);
                 break;
             case 'inadimplencia':
-                visualizacaoArea.innerHTML = renderInadimplencia(relatorioDadosBase);
+                dadosParaRenderizar = relatorioDadosBase.filter(d => d.status === 'Vencido');
+                visualizacaoArea.innerHTML = renderInadimplencia(dadosParaRenderizar);
                 break;
-            // ... (outros relatórios)
             default:
-                visualizacaoArea.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione os filtros e clique em "Gerar Relatório".</p>`;
+                visualizacaoArea.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione um tipo de relatório e clique em "Gerar Relatório".</p>`;
+                exportarRelatorioBtn.disabled = true;
+                return;
         }
 
-        exportarRelatorioBtn.disabled = relatorioDadosBase.length === 0;
+        exportarRelatorioBtn.disabled = dadosParaRenderizar.length === 0;
         tituloRelatorioEl.textContent = `Relatório: ${relatorioTipoSelect.options[relatorioTipoSelect.selectedIndex].textContent}`;
     }
 
-    function renderInadimplencia(dados) {
+    function renderInadimplencia(dados) { // dados are now pre-filtered for 'Vencido'
         const hoje = new Date();
         hoje.setHours(0, 0, 0, 0);
 
-        const dadosComAtraso = dados
-            .filter(d => d.status === 'Vencido')
-            .map(d => {
-                const dataVencimento = new Date(d.dataVencimento + 'T00:00:00');
-                const diffTime = Math.abs(hoje - dataVencimento);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                return { ...d, diasAtraso: diffDays };
-            });
+        const dadosComAtraso = dados.map(d => {
+            const dataVencimento = new Date(d.dataVencimento + 'T00:00:00');
+            const diffTime = Math.abs(hoje - dataVencimento);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return { ...d, diasAtraso: diffDays };
+        });
 
         if (dadosComAtraso.length === 0) {
             return `<p class="text-center text-gray-500 py-12">Nenhum título vencido encontrado para os filtros selecionados.</p>`;
@@ -210,7 +215,7 @@ export function initializeRelatorios(db, userId, common) {
         };
 
         try {
-            // Monta a query
+            // Build a simpler, more robust base query
             let q = collection(db, `users/${userId}/receitas`);
             let queryConstraints = [];
 
@@ -224,14 +229,7 @@ export function initializeRelatorios(db, userId, common) {
                 queryConstraints.push(where("clienteId", "==", filtros.clienteId));
             }
 
-            if (filtros.tipo === 'inadimplencia') {
-                queryConstraints.push(where("status", "==", "Vencido"));
-            } else {
-                if (filtros.status !== 'todos') {
-                    queryConstraints.push(where("status", "==", filtros.status));
-                }
-            }
-
+            // IMPORTANT: No status filter here. It will be done on the client.
             queryConstraints.push(orderBy("dataVencimento", "asc"));
 
             q = query(q, ...queryConstraints);
@@ -239,7 +237,7 @@ export function initializeRelatorios(db, userId, common) {
 
             relatorioDadosBase = snapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(d => d.status !== 'Desdobrado'); // Ignora títulos desdobrados
+                .filter(d => d.status !== 'Desdobrado');
 
             processarRelatorio(filtros.tipo, filtros);
 
