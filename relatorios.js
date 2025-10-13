@@ -231,19 +231,21 @@ export function initializeRelatorios(db, userId, common) {
             if (filtros.periodoAte) {
                 queryConstraints.push(where("dataVencimento", "<=", filtros.periodoAte));
             }
-            if (filtros.clienteId !== 'todos') {
-                queryConstraints.push(where("clienteId", "==", filtros.clienteId));
-            }
 
-            // IMPORTANT: No status filter here. It will be done on the client.
+            // IMPORTANT: No status or client filter here. It will be done on the client to avoid complex query issues.
             queryConstraints.push(orderBy("dataVencimento", "asc"));
 
             q = query(q, ...queryConstraints);
             const snapshot = await getDocs(q);
 
+            // Filter client and status on the client side
             relatorioDadosBase = snapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(d => d.status !== 'Desdobrado');
+                .filter(d => {
+                    const clienteMatch = filtros.clienteId === 'todos' || d.clienteId === filtros.clienteId;
+                    const statusMatch = d.status !== 'Desdobrado';
+                    return clienteMatch && statusMatch;
+                });
 
             processarRelatorio(filtros.tipo, filtros);
 
