@@ -47,7 +47,7 @@ export function initializeRelatorios(db, userId, common) {
                 visualizacaoArea.innerHTML = renderPosicaoCarteira(relatorioDadosBase, filtros);
                 break;
             case 'inadimplencia':
-                visualizacaoArea.innerHTML = '<h3>Análise de Inadimplência</h3><p>Funcionalidade em construção.</p>';
+                visualizacaoArea.innerHTML = renderInadimplencia(relatorioDadosBase);
                 break;
             // ... (outros relatórios)
             default:
@@ -56,6 +56,98 @@ export function initializeRelatorios(db, userId, common) {
 
         exportarRelatorioBtn.disabled = relatorioDadosBase.length === 0;
         tituloRelatorioEl.textContent = `Relatório: ${relatorioTipoSelect.options[relatorioTipoSelect.selectedIndex].textContent}`;
+    }
+
+    function renderInadimplencia(dados) {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        const dadosComAtraso = dados
+            .filter(d => d.status === 'Vencido')
+            .map(d => {
+                const dataVencimento = new Date(d.dataVencimento + 'T00:00:00');
+                const diffTime = Math.abs(hoje - dataVencimento);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return { ...d, diasAtraso: diffDays };
+            });
+
+        if (dadosComAtraso.length === 0) {
+            return `<p class="text-center text-gray-500 py-12">Nenhum título vencido encontrado para os filtros selecionados.</p>`;
+        }
+
+        const buckets = {
+            '30': { total: 0, items: [] },
+            '60': { total: 0, items: [] },
+            '90': { total: 0, items: [] },
+            '91+': { total: 0, items: [] }
+        };
+
+        dadosComAtraso.forEach(d => {
+            const saldo = d.saldoPendente || 0;
+            if (d.diasAtraso <= 30) {
+                buckets['30'].items.push(d);
+                buckets['30'].total += saldo;
+            } else if (d.diasAtraso <= 60) {
+                buckets['60'].items.push(d);
+                buckets['60'].total += saldo;
+            } else if (d.diasAtraso <= 90) {
+                buckets['90'].items.push(d);
+                buckets['90'].total += saldo;
+            } else {
+                buckets['91+'].items.push(d);
+                buckets['91+'].total += saldo;
+            }
+        });
+
+        let html = '';
+        const grandTotal = Object.values(buckets).reduce((acc, bucket) => acc + bucket.total, 0);
+
+        const renderBucket = (title, bucket) => {
+            if (bucket.items.length === 0) return '';
+            let bucketHtml = `
+                <div class="mb-8">
+                    <div class="flex justify-between items-center bg-gray-100 p-3 rounded-t-lg border-b">
+                        <h4 class="text-lg font-semibold text-gray-800">${title}</h4>
+                        <span class="font-bold text-lg text-red-600">${formatCurrency(bucket.total)}</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vencimento</th>
+                                    <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Dias em Atraso</th>
+                                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Saldo Pendente</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">`;
+
+            bucket.items.sort((a, b) => b.diasAtraso - a.diasAtraso).forEach(d => {
+                bucketHtml += `
+                    <tr>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${d.clienteNome}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${new Date(d.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-center font-semibold text-red-700">${d.diasAtraso}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">${formatCurrency(d.saldoPendente)}</td>
+                    </tr>`;
+            });
+
+            bucketHtml += `</tbody></table></div></div>`;
+            return bucketHtml;
+        };
+
+        html += renderBucket('Vencidos até 30 dias', buckets['30']);
+        html += renderBucket('Vencidos de 31 a 60 dias', buckets['60']);
+        html += renderBucket('Vencidos de 61 a 90 dias', buckets['90']);
+        html += renderBucket('Vencidos há mais de 90 dias', buckets['91+']);
+
+        html += `
+            <div class="mt-8 pt-4 border-t-2 border-gray-300 flex justify-end items-center">
+                <h3 class="text-xl font-bold text-gray-900">Total Geral Vencido:</h3>
+                <span class="text-xl font-bold text-red-700 ml-4">${formatCurrency(grandTotal)}</span>
+            </div>`;
+
+        return html;
     }
 
     function renderPosicaoCarteira(dados, filtros) {
