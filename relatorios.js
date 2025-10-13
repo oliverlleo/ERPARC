@@ -52,7 +52,8 @@ export function initializeRelatorios(db, userId, common) {
                 visualizacaoArea.innerHTML = renderPosicaoCarteira(dadosParaRenderizar, filtros);
                 break;
             case 'inadimplencia':
-                dadosParaRenderizar = relatorioDadosBase.filter(d => d.status === 'Vencido');
+                // Pass all non-paid items to the function, it will filter by date.
+                dadosParaRenderizar = relatorioDadosBase.filter(d => d.status === 'Pendente' || d.status === 'Vencido' || d.status === 'Recebido Parcialmente');
                 visualizacaoArea.innerHTML = renderInadimplencia(dadosParaRenderizar);
                 break;
             default:
@@ -65,16 +66,21 @@ export function initializeRelatorios(db, userId, common) {
         tituloRelatorioEl.textContent = `Relatório: ${relatorioTipoSelect.options[relatorioTipoSelect.selectedIndex].textContent}`;
     }
 
-    function renderInadimplencia(dados) { // dados are now pre-filtered for 'Vencido'
+    function renderInadimplencia(dados) {
         const hoje = new Date();
         hoje.setHours(0, 0, 0, 0);
 
-        const dadosComAtraso = dados.map(d => {
-            const dataVencimento = new Date(d.dataVencimento + 'T00:00:00');
-            const diffTime = Math.abs(hoje - dataVencimento);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            return { ...d, diasAtraso: diffDays };
-        });
+        const dadosComAtraso = dados
+            .filter(d => {
+                const dataVencimento = new Date(d.dataVencimento + 'T00:00:00');
+                return dataVencimento < hoje && (d.status === 'Pendente' || d.status === 'Vencido' || d.status === 'Recebido Parcialmente');
+            })
+            .map(d => {
+                const dataVencimento = new Date(d.dataVencimento + 'T00:00:00');
+                const diffTime = Math.abs(hoje - dataVencimento);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return { ...d, diasAtraso: diffDays };
+            });
 
         if (dadosComAtraso.length === 0) {
             return `<p class="text-center text-gray-500 py-12">Nenhum título vencido encontrado para os filtros selecionados.</p>`;
