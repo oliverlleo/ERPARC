@@ -5169,6 +5169,7 @@
             initializeNotificationsPage(db, effectiveUserId);
             initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
             initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
+            initializeRelatorios(db, effectiveUserId, commonUtils);
             showView('main-page');
             updateStatusFilterUI();
             updateReceitaStatusFilterUI();
@@ -5190,6 +5191,7 @@
                 initializeNotificationsPage(db, effectiveUserId);
                 initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
                 initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
+                initializeRelatorios(db, effectiveUserId, commonUtils);
                 showView('main-page');
                 updateStatusFilterUI();
                 updateReceitaStatusFilterUI();
