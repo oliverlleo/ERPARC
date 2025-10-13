@@ -5362,6 +5362,7 @@
             initializeNotificationsPage(db, effectiveUserId);
             initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
             initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
+            initializeRelatoriosPage(db, effectiveUserId, commonUtils);
             showView('main-page');
             updateStatusFilterUI();
             updateReceitaStatusFilterUI();
@@ -5383,6 +5384,7 @@
                 initializeNotificationsPage(db, effectiveUserId);
                 initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
                 initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
+                initializeRelatoriosPage(db, effectiveUserId, commonUtils);
                 showView('main-page');
                 updateStatusFilterUI();
                 updateReceitaStatusFilterUI();
@@ -9209,26 +9211,33 @@ function validateParcelasSum() {
         let previsaoChart = null;
         let categoriasChart = null;
 
-        // --- Populate client filter dropdowns ---
-        const clientesQueryReports = query(collection(db, 'users', userId, 'clientes'));
-        onSnapshot(clientesQueryReports, (querySnapshot) => {
-            const populateFilter = (filterElement) => {
-                if (filterElement) {
-                    const currentVal = filterElement.value;
-                    filterElement.innerHTML = '<option value="todos">Todos os Clientes</option>';
-                    querySnapshot.forEach(doc => {
-                        const data = doc.data();
-                        const option = document.createElement('option');
-                        option.value = doc.id;
-                        option.textContent = data.nome || data.razaoSocial || 'Cliente sem nome';
-                        filterElement.appendChild(option);
-                    });
-                    filterElement.value = currentVal;
-                }
-            };
-            populateFilter(document.getElementById('report-cliente-filter'));
-            populateFilter(document.getElementById('report-inadimplencia-cliente-filter'));
-        });
+        // --- Populate client filter dropdowns (on-demand) ---
+        async function populateReportClientFilters() {
+             if (!effectiveUserId) return; // Extra safety check
+            const clientesQueryReports = query(collection(db, 'users', effectiveUserId, 'clientes'));
+            try {
+                const querySnapshot = await getDocs(clientesQueryReports);
+                const populateFilter = (filterElement) => {
+                    if (filterElement) {
+                        const currentVal = filterElement.value;
+                        filterElement.innerHTML = '<option value="todos">Todos os Clientes</option>';
+                        querySnapshot.forEach(doc => {
+                            const data = doc.data();
+                            const option = document.createElement('option');
+                            option.value = doc.id;
+                            option.textContent = data.nome || data.razaoSocial || 'Cliente sem nome';
+                            filterElement.appendChild(option);
+                        });
+                        filterElement.value = currentVal;
+                    }
+                };
+                populateFilter(document.getElementById('report-cliente-filter'));
+                populateFilter(document.getElementById('report-inadimplencia-cliente-filter'));
+            } catch (error) {
+                console.error("Error populating report client filters:", error);
+            }
+        }
+        populateReportClientFilters();
 
         // --- Tab switching logic ---
         reportTabLinks.forEach(link => {
@@ -9273,6 +9282,19 @@ function validateParcelasSum() {
                 if (e.target.classList.contains('status-filter-btn')) {
                     faixaAtrasoGroup.querySelectorAll('.status-filter-btn').forEach(btn => btn.classList.remove('active'));
                     e.target.classList.add('active');
+                }
+            });
+        }
+
+        // --- Previsao Report Specific Logic ---
+        const previsaoPeriodoSelect = document.getElementById('report-previsao-periodo');
+        const customDateRange = document.getElementById('previsao-custom-date-range');
+        if (previsaoPeriodoSelect) {
+            previsaoPeriodoSelect.addEventListener('change', () => {
+                if (previsaoPeriodoSelect.value === 'custom') {
+                    customDateRange.classList.remove('hidden');
+                } else {
+                    customDateRange.classList.add('hidden');
                 }
             });
         }
@@ -9991,434 +10013,6 @@ function validateParcelasSum() {
                 }
             });
         });
-
-        // --- Event listeners for generating reports ---
-        document.getElementById('gerar-relatorio-posicao-carteira')?.addEventListener('click', generatePosicaoCarteiraReport);
-        document.getElementById('gerar-relatorio-inadimplencia')?.addEventListener('click', generateInadimplenciaReport);
-        document.getElementById('gerar-relatorio-previsao')?.addEventListener('click', generatePrevisaoReport);
-        document.getElementById('gerar-relatorio-categorias')?.addEventListener('click', generateCategoriasReport);
-        document.getElementById('gerar-relatorio-ranking')?.addEventListener('click', generateRankingReport);
-
-        // --- Event listeners for exporting reports ---
-        document.getElementById('exportar-relatorio-posicao-carteira')?.addEventListener('click', exportPosicaoCarteiraToCSV);
-        document.getElementById('exportar-relatorio-inadimplencia')?.addEventListener('click', exportInadimplenciaToCSV);
-        document.getElementById('exportar-relatorio-ranking')?.addEventListener('click', exportRankingToCSV);
-
-        // --- Logic for status filter buttons ---
-        const reportStatusFilterGroup = document.getElementById('report-status-filter-group');
-        if(reportStatusFilterGroup) {
-            reportStatusFilterGroup.addEventListener('click', (e) => {
-                if (e.target.classList.contains('status-filter-btn')) {
-                    e.target.classList.toggle('active');
-                }
-            });
-        }
-
-        const faixaAtrasoGroup = document.getElementById('report-inadimplencia-faixa-atraso-filter-group');
-        if (faixaAtrasoGroup) {
-            faixaAtrasoGroup.addEventListener('click', (e) => {
-                if (e.target.classList.contains('status-filter-btn')) {
-                    faixaAtrasoGroup.querySelectorAll('.status-filter-btn').forEach(btn => btn.classList.remove('active'));
-                    e.target.classList.add('active');
-                }
-            });
-        }
-
-        // --- Previsao Report Specific Logic ---
-        const previsaoPeriodoSelect = document.getElementById('report-previsao-periodo');
-        const customDateRange = document.getElementById('previsao-custom-date-range');
-        if (previsaoPeriodoSelect) {
-            previsaoPeriodoSelect.addEventListener('change', () => {
-                if (previsaoPeriodoSelect.value === 'custom') {
-                    customDateRange.classList.remove('hidden');
-                } else {
-                    customDateRange.classList.add('hidden');
-                }
-            });
-        }
-
-        // --- Report Generation Functions ---
-
-        async function generatePosicaoCarteiraReport() {
-            const tableBody = document.getElementById('report-posicao-carteira-table-body');
-            tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8 text-gray-500">Gerando relatório...</td></tr>';
-
-            const clienteId = document.getElementById('report-cliente-filter').value;
-            const vencimentoDe = document.getElementById('report-vencimento-de').value;
-            const vencimentoAte = document.getElementById('report-vencimento-ate').value;
-            const activeStatusButtons = reportStatusFilterGroup.querySelectorAll('.status-filter-btn.active');
-            const activeStatuses = Array.from(activeStatusButtons).map(btn => btn.dataset.status);
-
-            let q = query(collection(db, 'users', userId, 'receitas'));
-
-            if (clienteId !== 'todos') q = query(q, where("clienteId", "==", clienteId));
-            if (vencimentoDe) q = query(q, where("dataVencimento", ">=", vencimentoDe));
-            if (vencimentoAte) q = query(q, where("dataVencimento", "<=", vencimentoAte));
-            if (activeStatuses.length > 0) q = query(q, where("status", "in", activeStatuses));
-
-            try {
-                const querySnapshot = await getDocs(q);
-                renderPosicaoCarteiraTable(querySnapshot.docs);
-            } catch (error) {
-                console.error("Erro ao gerar relatório:", error);
-                tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8 text-red-500">Erro ao gerar relatório.</td></tr>';
-            }
-        }
-
-        function renderPosicaoCarteiraTable(docs) {
-            const tableBody = document.getElementById('report-posicao-carteira-table-body');
-            const totalValorOriginalEl = document.getElementById('total-valor-original');
-            const totalSaldoPendenteEl = document.getElementById('total-saldo-pendente');
-            tableBody.innerHTML = '';
-            let totalValorOriginal = 0;
-            let totalSaldoPendente = 0;
-
-            if (docs.empty) {
-                tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8 text-gray-500">Nenhum dado encontrado.</td></tr>';
-                totalValorOriginalEl.textContent = formatCurrency(0);
-                totalSaldoPendenteEl.textContent = formatCurrency(0);
-                return;
-            }
-
-            docs.forEach(doc => {
-                const data = doc.data();
-                const tr = tableBody.insertRow();
-                const valorOriginal = data.valorOriginal || 0;
-                const saldoPendente = data.saldoPendente || 0;
-                totalValorOriginal += valorOriginal;
-                totalSaldoPendente += saldoPendente;
-                tr.innerHTML = `
-                    <td class="px-6 py-4">${data.clienteNome || 'N/A'}</td>
-                    <td class="px-6 py-4">${data.descricao}</td>
-                    <td class="px-6 py-4">${new Date((data.dataVencimento || data.vencimento) + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                    <td class="px-6 py-4 text-right">${formatCurrency(valorOriginal)}</td>
-                    <td class="px-6 py-4 text-right font-bold">${formatCurrency(saldoPendente)}</td>
-                    <td class="px-6 py-4">${data.status || 'Pendente'}</td>
-                `;
-            });
-            totalValorOriginalEl.textContent = formatCurrency(totalValorOriginal);
-            totalSaldoPendenteEl.textContent = formatCurrency(totalSaldoPendente);
-        }
-
-        async function generateInadimplenciaReport() {
-            const tableBody = document.getElementById('report-inadimplencia-table-body');
-            tableBody.innerHTML = '<tr><td colspan="5" class="text-center p-8 text-gray-500">Gerando relatório...</td></tr>';
-
-            const clienteId = document.getElementById('report-inadimplencia-cliente-filter').value;
-            const activeRangeBtn = faixaAtrasoGroup.querySelector('.status-filter-btn.active');
-            const range = activeRangeBtn ? activeRangeBtn.dataset.range : null;
-
-            let q = query(collection(db, 'users', userId, 'receitas'), where("status", "in", ["Vencido", "Recebido Parcialmente"]));
-            if (clienteId !== 'todos') q = query(q, where("clienteId", "==", clienteId));
-
-            try {
-                const querySnapshot = await getDocs(q);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-
-                let filteredDocs = querySnapshot.docs.map(doc => {
-                    const data = doc.data();
-                    const vencimento = new Date((data.dataVencimento || data.vencimento) + 'T00:00:00');
-                    const diasAtraso = Math.floor((today - vencimento) / (1000 * 60 * 60 * 24));
-                    return { ...data, diasAtraso, id: doc.id };
-                }).filter(data => data.diasAtraso > 0);
-
-                if (range) {
-                    const [min, max] = range.split('-').map(Number);
-                    filteredDocs = filteredDocs.filter(data => {
-                        if (range.includes('+')) return data.diasAtraso >= min;
-                        return data.diasAtraso >= min && data.diasAtraso <= max;
-                    });
-                }
-                renderInadimplenciaTable(filteredDocs);
-            } catch (error) {
-                console.error("Erro ao gerar relatório de inadimplência:", error);
-                tableBody.innerHTML = '<tr><td colspan="5" class="text-center p-8 text-red-500">Erro.</td></tr>';
-            }
-        }
-
-        function renderInadimplenciaTable(docs) {
-            const tableBody = document.getElementById('report-inadimplencia-table-body');
-            const totalVencidoEl = document.getElementById('total-inadimplencia');
-            tableBody.innerHTML = '';
-            let totalVencido = 0;
-
-            if (docs.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="5" class="text-center p-8">Nenhum título vencido encontrado.</td></tr>';
-                totalVencidoEl.textContent = formatCurrency(0);
-                return;
-            }
-
-            docs.sort((a, b) => b.diasAtraso - a.diasAtraso);
-            docs.forEach(data => {
-                const tr = tableBody.insertRow();
-                totalVencido += data.saldoPendente || 0;
-                tr.innerHTML = `
-                    <td class="px-6 py-4">${data.clienteNome || 'N/A'}</td>
-                    <td class="px-6 py-4">${data.clienteContato || 'N/A'}</td>
-                    <td class="px-6 py-4">${new Date((data.dataVencimento || data.vencimento) + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                    <td class="px-6 py-4 text-center font-bold text-red-600">${data.diasAtraso}</td>
-                    <td class="px-6 py-4 text-right font-bold text-red-600">${formatCurrency(data.saldoPendente || 0)}</td>
-                `;
-            });
-            totalVencidoEl.textContent = formatCurrency(totalVencido);
-        }
-
-        async function generatePrevisaoReport() {
-            const tableBody = document.getElementById('report-previsao-table-body');
-            tableBody.innerHTML = '<tr><td colspan="2" class="text-center p-8">Gerando relatório...</td></tr>';
-
-            const today = new Date();
-            let startDate = new Date(today);
-            let endDate = new Date(today);
-
-            const periodoValue = document.getElementById('report-previsao-periodo').value;
-            if (periodoValue === 'custom') {
-                startDate = new Date(document.getElementById('report-previsao-de').value + 'T00:00:00');
-                endDate = new Date(document.getElementById('report-previsao-ate').value + 'T00:00:00');
-            } else {
-                endDate.setDate(today.getDate() + parseInt(periodoValue));
-            }
-
-            const q = query(collection(db, 'users', userId, 'receitas'),
-                where("status", "in", ["Pendente", "Vencido", "Recebido Parcialmente"]),
-                where("dataVencimento", ">=", startDate.toISOString().split('T')[0]),
-                where("dataVencimento", "<=", endDate.toISOString().split('T')[0])
-            );
-
-            try {
-                const querySnapshot = await getDocs(q);
-                const data = processPrevisaoData(querySnapshot.docs);
-                renderPrevisaoTable(data);
-                renderPrevisaoChart(data);
-            } catch (error) {
-                console.error("Erro ao gerar relatório de previsão:", error);
-                tableBody.innerHTML = '<tr><td colspan="2" class="text-center p-8 text-red-500">Erro.</td></tr>';
-            }
-        }
-
-        function processPrevisaoData(docs) {
-            const weeklyData = {};
-            docs.forEach(doc => {
-                const data = doc.data();
-                const vencimento = new Date((data.dataVencimento || data.vencimento) + 'T00:00:00');
-                const weekStart = new Date(vencimento);
-                weekStart.setDate(vencimento.getDate() - vencimento.getDay());
-                const weekKey = weekStart.toISOString().split('T')[0];
-                if (!weeklyData[weekKey]) weeklyData[weekKey] = 0;
-                weeklyData[weekKey] += data.saldoPendente || 0;
-            });
-            return Object.entries(weeklyData).map(([key, value]) => ({ week: key, value: value })).sort((a,b) => new Date(a.week) - new Date(b.week));
-        }
-
-        function renderPrevisaoTable(data) {
-            const tableBody = document.getElementById('report-previsao-table-body');
-            tableBody.innerHTML = '';
-            if (data.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="2" class="text-center p-8">Nenhuma previsão encontrada.</td></tr>';
-                return;
-            }
-            data.forEach(item => {
-                const tr = tableBody.insertRow();
-                const weekDate = new Date(item.week + 'T00:00:00');
-                tr.innerHTML = `
-                    <td class="px-4 py-2">Semana de ${weekDate.toLocaleDateString('pt-BR')}</td>
-                    <td class="px-4 py-2 text-right font-medium">${formatCurrency(item.value)}</td>
-                `;
-            });
-        }
-
-        function renderPrevisaoChart(data) {
-            const ctx = document.getElementById('chart-previsao-recebimentos').getContext('2d');
-            if (previsaoChart) previsaoChart.destroy();
-            previsaoChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.map(item => `Semana de ${new Date(item.week + 'T00:00:00').toLocaleDateString('pt-BR')}`),
-                    datasets: [{
-                        label: 'Valor Previsto a Receber',
-                        data: data.map(item => item.value / 100),
-                        backgroundColor: 'rgba(59, 130, 246, 0.5)',
-                        borderColor: 'rgba(59, 130, 246, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: { scales: { y: { beginAtZero: true, ticks: { callback: (v) => 'R$ ' + v.toLocaleString('pt-BR') } } } }
-            });
-        }
-
-        async function generateCategoriasReport() {
-            const tableBody = document.getElementById('report-categorias-table-body');
-            tableBody.innerHTML = '<tr><td colspan="3" class="text-center p-8">Gerando...</td></tr>';
-
-            const startDate = document.getElementById('report-categoria-de').value;
-            const endDate = document.getElementById('report-categoria-ate').value;
-
-            const recebimentosQuery = query(collectionGroup(db, 'recebimentos'), where('adminId', '==', userId));
-
-            try {
-                const querySnapshot = await getDocs(recebimentosQuery);
-                const data = await processCategoriasData(querySnapshot.docs, startDate, endDate);
-                renderCategoriasTable(data);
-                renderCategoriasChart(data);
-            } catch (error) {
-                console.error("Erro ao gerar relatório por categoria:", error);
-                tableBody.innerHTML = '<tr><td colspan="3" class="text-center p-8 text-red-500">Erro.</td></tr>';
-            }
-        }
-
-        async function processCategoriasData(docs, startDate, endDate) {
-            let categoryData = {};
-            const filteredDocs = docs.filter(doc => {
-                const data = doc.data();
-                return data.dataTransacao && (!startDate || data.dataTransacao >= startDate) && (!endDate || data.dataTransacao <= endDate);
-            });
-            const parentReceitasPromises = filteredDocs.map(doc => getDoc(doc.ref.parent.parent));
-            const parentReceitasSnapshots = await Promise.all(parentReceitasPromises);
-            for (let i = 0; i < filteredDocs.length; i++) {
-                const recebimentoData = filteredDocs[i].data();
-                const parentData = parentReceitasSnapshots[i].data();
-                if (parentData) {
-                    const { categoriaId } = parentData;
-                    const valor = recebimentoData.valorPrincipal || 0;
-                    if (categoriaId) {
-                        if (!categoryData[categoriaId]) categoryData[categoriaId] = { value: 0, name: '' };
-                        categoryData[categoriaId].value += valor;
-                    }
-                }
-            }
-            const categoriasPromises = Object.keys(categoryData).map(id => getDoc(doc(db, 'users', userId, 'planosDeContas', id)));
-            const categoriasSnapshots = await Promise.all(categoriasPromises);
-            categoriasSnapshots.forEach(snap => {
-                if(snap.exists() && categoryData[snap.id]) categoryData[snap.id].name = snap.data().nome || 'Desconhecida';
-            });
-            return Object.values(categoryData).filter(c => c.name);
-        }
-
-        function renderCategoriasTable(data) {
-            const tableBody = document.getElementById('report-categorias-table-body');
-            tableBody.innerHTML = '';
-            const total = data.reduce((sum, item) => sum + item.value, 0);
-            if (data.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="3" class="text-center p-8">Nenhum recebimento no período.</td></tr>';
-                return;
-            }
-            data.sort((a,b) => b.value - a.value).forEach(item => {
-                const percentage = total > 0 ? ((item.value / total) * 100).toFixed(2) : 0;
-                const tr = tableBody.insertRow();
-                tr.innerHTML = `
-                    <td class="px-4 py-2">${item.name}</td>
-                    <td class="px-4 py-2 text-right font-medium">${formatCurrency(item.value)}</td>
-                    <td class="px-4 py-2 text-right">${percentage}%</td>
-                `;
-            });
-        }
-
-        function renderCategoriasChart(data) {
-            const ctx = document.getElementById('chart-analise-categorias').getContext('2d');
-            if (categoriasChart) categoriasChart.destroy();
-            categoriasChart = new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: data.map(item => item.name),
-                    datasets: [{
-                        label: 'Recebimentos',
-                        data: data.map(item => item.value / 100),
-                        backgroundColor: ['rgba(59,130,246,0.7)', 'rgba(239,68,68,0.7)', 'rgba(245,158,11,0.7)', 'rgba(16,185,129,0.7)', 'rgba(139,92,246,0.7)', 'rgba(236,72,153,0.7)'],
-                        hoverOffset: 4
-                    }]
-                },
-                options: { responsive: true, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: c => `${c.label}: ${new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(c.parsed)}` } } } }
-            });
-        }
-
-        async function generateRankingReport() {
-            const tableBody = document.getElementById('report-ranking-table-body');
-            tableBody.innerHTML = '<tr><td colspan="3" class="text-center p-8">Gerando...</td></tr>';
-            const startDate = document.getElementById('report-ranking-de').value;
-            const endDate = document.getElementById('report-ranking-ate').value;
-            const recebimentosQuery = query(collectionGroup(db, 'recebimentos'), where('adminId', '==', userId));
-            try {
-                const querySnapshot = await getDocs(recebimentosQuery);
-                const data = await processRankingData(querySnapshot.docs, startDate, endDate);
-                renderRankingTable(data);
-            } catch (error) {
-                console.error("Erro ao gerar ranking:", error);
-                tableBody.innerHTML = '<tr><td colspan="3" class="text-center p-8 text-red-500">Erro.</td></tr>';
-            }
-        }
-
-        async function processRankingData(docs, startDate, endDate) {
-            let clientData = {};
-            const filteredDocs = docs.filter(doc => {
-                const data = doc.data();
-                return data.dataTransacao && (!startDate || data.dataTransacao >= startDate) && (!endDate || data.dataTransacao <= endDate);
-            });
-            const parentReceitasPromises = filteredDocs.map(doc => getDoc(doc.ref.parent.parent));
-            const parentReceitasSnapshots = await Promise.all(parentReceitasPromises);
-            for (let i = 0; i < filteredDocs.length; i++) {
-                const recebimentoData = filteredDocs[i].data();
-                const parentData = parentReceitasSnapshots[i].data();
-                if (parentData) {
-                    const { clienteId, clienteNome } = parentData;
-                    const valor = recebimentoData.valorPrincipal || 0;
-                    if (clienteId) {
-                        if (!clientData[clienteId]) clientData[clienteId] = { value: 0, name: clienteNome };
-                        clientData[clienteId].value += valor;
-                    }
-                }
-            }
-            return Object.values(clientData).sort((a,b) => b.value - a.value);
-        }
-
-        function renderRankingTable(data) {
-            const tableBody = document.getElementById('report-ranking-table-body');
-            tableBody.innerHTML = '';
-            if (data.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="3" class="text-center p-8">Nenhum recebimento no período.</td></tr>';
-                return;
-            }
-            data.forEach((item, index) => {
-                const tr = tableBody.insertRow();
-                tr.innerHTML = `
-                    <td class="px-6 py-4 text-center font-bold">${index + 1}º</td>
-                    <td class="px-6 py-4">${item.name}</td>
-                    <td class="px-6 py-4 text-right font-medium">${formatCurrency(item.value)}</td>
-                `;
-            });
-        }
-
-        // --- Export Functions ---
-        function exportToCSV(filename, tableBody, headers) {
-            const rows = tableBody.querySelectorAll('tr');
-            if (rows.length === 0 || (rows.length === 1 && rows[0].textContent.includes('Nenhum dado'))) {
-                alert("Não há dados para exportar.");
-                return;
-            }
-            let csvContent = "data:text/csv;charset=utf-8," + headers.join(";") + "\r\n";
-            rows.forEach(row => {
-                const cols = row.querySelectorAll('td');
-                const rowData = Array.from(cols).map(col => `"${col.innerText.replace(/"/g, '""')}"`);
-                csvContent += rowData.join(";") + "\r\n";
-            });
-            const link = document.createElement("a");
-            link.setAttribute("href", encodeURI(csvContent));
-            link.setAttribute("download", filename);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        function exportPosicaoCarteiraToCSV() {
-            exportToCSV("relatorio_posicao_carteira.csv", document.getElementById('report-posicao-carteira-table-body'), ["Cliente", "Descricao", "Vencimento", "Valor Original", "Saldo Pendente", "Status"]);
-        }
-        function exportInadimplenciaToCSV() {
-            exportToCSV("relatorio_inadimplencia.csv", document.getElementById('report-inadimplencia-table-body'), ["Cliente", "Contato", "Vencimento", "Dias Atraso", "Saldo Vencido"]);
-        }
-        function exportRankingToCSV() {
-            exportToCSV("relatorio_ranking_clientes.csv", document.getElementById('report-ranking-table-body'), ["Posicao", "Cliente", "Valor Recebido"]);
-        }
-    }
 
     // --- Lógica dos Filtros do Dashboard ---
     const cardMappings = [
