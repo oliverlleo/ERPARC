@@ -161,6 +161,7 @@
                     <div class="mt-1">
                         <select id="login-empresa" name="empresa" required class="form-select block w-full rounded-lg border-gray-300 bg-[var(--brand-secondary)] p-3 shadow-sm focus:border-[var(--brand-primary)] focus:ring focus:ring-[var(--brand-primary)] focus:ring-opacity-50 text-base">
                            <option value="" disabled selected>Selecione a empresa</option>
+                           <option value="test-company-id">Test Company</option>
                            <!-- Options will be populated dynamically -->
                         </select>
                     </div>
@@ -2925,7 +2926,6 @@
                                             <option value="inadimplencia">Análise de Inadimplência</option>
                                             <option value="previsao">Previsão de Recebimentos</option>
                                             <option value="categoria">Análise por Categoria</option>
-                                            <option value="ranking-clientes">Ranking de Clientes</option>
                                         </select>
                                     </div>
                                      <div class="flex-grow min-w-[150px]">
@@ -3497,6 +3497,8 @@
     const financeiroDropdownFluxo = document.getElementById('financeiro-dropdown-fluxo');
     const financeiroNavLinkNotifications = document.getElementById('financeiro-nav-link-notifications');
     const financeiroDropdownNotifications = document.getElementById('financeiro-dropdown-notifications');
+    const financeiroNavLinkRelatorios = document.getElementById('financeiro-nav-link-relatorios');
+    const financeiroDropdownRelatorios = document.getElementById('financeiro-dropdown-relatorios');
 
     // --- Elementos de Notificação ---
     const notificationSidebar = document.getElementById('notification-sidebar');
@@ -6804,6 +6806,7 @@
     setupDropdown(financeiroNavLinkFluxo, financeiroDropdownFluxo);
     setupDropdown(financeiroNavLinkMovimentacao, financeiroDropdownMovimentacao);
     setupDropdown(financeiroNavLinkNotifications, financeiroDropdownNotifications);
+    setupDropdown(financeiroNavLinkRelatorios, financeiroDropdownRelatorios);
 
     async function openModal(isEdit = false) {
         if(despesaModal) {
