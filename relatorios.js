@@ -223,9 +223,15 @@ export function initializeRelatorios(db, userId, common) {
             if (filtros.clienteId !== 'todos') {
                 queryConstraints.push(where("clienteId", "==", filtros.clienteId));
             }
-            if (filtros.status !== 'todos') {
-                queryConstraints.push(where("status", "==", filtros.status));
+
+            if (filtros.tipo === 'inadimplencia') {
+                queryConstraints.push(where("status", "==", "Vencido"));
+            } else {
+                if (filtros.status !== 'todos') {
+                    queryConstraints.push(where("status", "==", filtros.status));
+                }
             }
+
             queryConstraints.push(orderBy("dataVencimento", "asc"));
 
             q = query(q, ...queryConstraints);
@@ -246,7 +252,19 @@ export function initializeRelatorios(db, userId, common) {
         }
     });
 
+    function toggleReportFilters() {
+        const selectedType = relatorioTipoSelect.value;
+        const statusFilterContainer = statusSelect.parentElement;
+
+        if (selectedType === 'inadimplencia') {
+            statusFilterContainer.classList.add('hidden');
+        } else {
+            statusFilterContainer.classList.remove('hidden');
+        }
+    }
+
     relatorioTipoSelect.addEventListener('change', () => {
+        toggleReportFilters();
         // Reinicia a visualização e os dados ao trocar o tipo de relatório
         if (relatorioDadosBase.length > 0) {
             processarRelatorio(relatorioTipoSelect.value, { periodoDe: periodoDeInput.value, periodoAte: periodoAteInput.value, clienteId: clienteSelect.value, status: statusSelect.value, tipo: relatorioTipoSelect.value });
@@ -280,4 +298,5 @@ export function initializeRelatorios(db, userId, common) {
 
     // Chamadas iniciais
     populateClientesDropdown();
+    toggleReportFilters();
 }
