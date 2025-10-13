@@ -9201,53 +9201,77 @@ function validateParcelasSum() {
     if (relatoriosPage) {
         const reportTabLinks = relatoriosPage.querySelectorAll('.report-tab-link');
         const reportTabContents = relatoriosPage.querySelectorAll('.report-tab-content');
-        const gerarRelatorioBtn = document.getElementById('gerar-relatorio-posicao-carteira');
         const reportClienteFilter = document.getElementById('report-cliente-filter');
+        const inadimplenciaClienteFilter = document.getElementById('report-inadimplencia-cliente-filter');
 
-        // Populate client filter dropdown
+        // Populate client filter dropdowns
         const clientesQueryReports = query(collection(db, 'users', effectiveUserId, 'clientes'));
         onSnapshot(clientesQueryReports, (querySnapshot) => {
-            if(reportClienteFilter) {
-                const currentVal = reportClienteFilter.value;
-                reportClienteFilter.innerHTML = '<option value="todos">Todos os Clientes</option>';
-                querySnapshot.forEach(doc => {
-                    const data = doc.data();
-                    const option = document.createElement('option');
-                    option.value = doc.id;
-                    option.textContent = data.nome || data.razaoSocial || 'Cliente sem nome';
-                    reportClienteFilter.appendChild(option);
-                });
-                reportClienteFilter.value = currentVal;
-            }
+            const populateFilter = (filterElement) => {
+                if (filterElement) {
+                    const currentVal = filterElement.value;
+                    filterElement.innerHTML = '<option value="todos">Todos os Clientes</option>';
+                    querySnapshot.forEach(doc => {
+                        const data = doc.data();
+                        const option = document.createElement('option');
+                        option.value = doc.id;
+                        option.textContent = data.nome || data.razaoSocial || 'Cliente sem nome';
+                        filterElement.appendChild(option);
+                    });
+                    filterElement.value = currentVal;
+                }
+            };
+            populateFilter(reportClienteFilter);
+            populateFilter(inadimplenciaClienteFilter);
         });
 
+        // Tab switching logic
         reportTabLinks.forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
+                // Deactivate all tabs and hide all content
                 reportTabLinks.forEach(item => item.classList.remove('active'));
-                link.classList.add('active');
+                reportTabContents.forEach(content => content.classList.add('hidden'));
 
+                // Activate the clicked tab
+                link.classList.add('active');
+                // Show the corresponding content
                 const reportId = link.dataset.report;
-                reportTabContents.forEach(content => {
-                    content.classList.toggle('hidden', content.id !== `${reportId}-report-content`);
-                });
+                const activeContent = document.getElementById(`${reportId}-report-content`);
+                if (activeContent) {
+                    activeContent.classList.remove('hidden');
+                }
             });
         });
 
-        if (gerarRelatorioBtn) {
-            gerarRelatorioBtn.addEventListener('click', generatePosicaoCarteiraReport);
-        }
+        // Event listeners for generating reports
+        document.getElementById('gerar-relatorio-posicao-carteira')?.addEventListener('click', generatePosicaoCarteiraReport);
+        document.getElementById('gerar-relatorio-inadimplencia')?.addEventListener('click', generateInadimplenciaReport);
+        document.getElementById('gerar-relatorio-previsao')?.addEventListener('click', generatePrevisaoReport);
+        document.getElementById('gerar-relatorio-categorias')?.addEventListener('click', generateCategoriasReport);
+        document.getElementById('gerar-relatorio-ranking')?.addEventListener('click', generateRankingReport);
 
-        const exportBtn = document.getElementById('exportar-relatorio-posicao-carteira');
-        if (exportBtn) {
-            exportBtn.addEventListener('click', exportPosicaoCarteiraToCSV);
-        }
+        // Event listeners for exporting reports
+        document.getElementById('exportar-relatorio-posicao-carteira')?.addEventListener('click', exportPosicaoCarteiraToCSV);
+        document.getElementById('exportar-relatorio-inadimplencia')?.addEventListener('click', exportInadimplenciaToCSV);
+        document.getElementById('exportar-relatorio-ranking')?.addEventListener('click', exportRankingToCSV);
 
+        // Logic for status filter buttons
         const reportStatusFilterGroup = document.getElementById('report-status-filter-group');
         if(reportStatusFilterGroup) {
             reportStatusFilterGroup.addEventListener('click', (e) => {
                 if (e.target.classList.contains('status-filter-btn')) {
                     e.target.classList.toggle('active');
+                }
+            });
+        }
+
+        const faixaAtrasoGroup = document.getElementById('report-inadimplencia-faixa-atraso-filter-group');
+        if (faixaAtrasoGroup) {
+            faixaAtrasoGroup.addEventListener('click', (e) => {
+                if (e.target.classList.contains('status-filter-btn')) {
+                    faixaAtrasoGroup.querySelectorAll('.status-filter-btn').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
                 }
             });
         }
