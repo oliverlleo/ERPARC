@@ -1,0 +1,5 @@
+127.0.0.1 - - [13/Oct/2025 11:31:27] "GET /index.html HTTP/1.1" 200 -
+127.0.0.1 - - [13/Oct/2025 11:31:27] "GET /fluxo-de-caixa.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/Oct/2025 11:31:27] "GET /movimentacao-bancaria.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/Oct/2025 11:31:28] "GET /notifications.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/Oct/2025 11:31:28] "GET /login.png HTTP/1.1" 200 -
