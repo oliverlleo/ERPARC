@@ -56,6 +56,14 @@ export function initializeRelatorios(db, userId, common) {
                 dadosParaRenderizar = relatorioDadosBase.filter(d => d.status === 'Pendente' || d.status === 'Vencido' || d.status === 'Recebido Parcialmente');
                 visualizacaoArea.innerHTML = renderInadimplencia(dadosParaRenderizar);
                 break;
+            case 'previsao':
+                dadosParaRenderizar = relatorioDadosBase.filter(d => d.status === 'Pendente' || d.status === 'Recebido Parcialmente');
+                visualizacaoArea.innerHTML = renderPrevisaoRecebimentos(dadosParaRenderizar);
+                break;
+            case 'categoria':
+                dadosParaRenderizar = relatorioDadosBase; // All data, will be grouped inside
+                visualizacaoArea.innerHTML = renderAnaliseCategoria(dadosParaRenderizar);
+                break;
             default:
                 visualizacaoArea.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione um tipo de relatório e clique em "Gerar Relatório".</p>`;
                 exportarRelatorioBtn.disabled = true;
@@ -158,6 +166,91 @@ export function initializeRelatorios(db, userId, common) {
                 <span class="text-xl font-bold text-red-700 ml-4">${formatCurrency(grandTotal)}</span>
             </div>`;
 
+        return html;
+    }
+
+    function renderAnaliseCategoria(dados) {
+        if (dados.length === 0) {
+            return `<p class="text-center text-gray-500 py-12">Nenhum dado encontrado para analisar por categoria.</p>`;
+        }
+
+        const categorias = {};
+        dados.forEach(d => {
+            const categoriaId = d.categoriaId || 'sem-categoria';
+            const categoriaNome = d.categoriaNome || 'Sem Categoria'; // Assume you might add categoriaNome later
+            if (!categorias[categoriaId]) {
+                categorias[categoriaId] = { nome: categoriaNome, total: 0, recebido: 0, aReceber: 0 };
+            }
+            categorias[categoriaId].total += d.valorOriginal || 0;
+            categorias[categoriaId].recebido += d.totalRecebido || 0;
+            categorias[categoriaId].aReceber += d.saldoPendente || 0;
+        });
+
+        let html = `
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoria</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor Total</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Recebido</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">A Receber</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">`;
+
+        for (const id in categorias) {
+            const cat = categorias[id];
+            html += `
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${cat.nome}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${formatCurrency(cat.total)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-green-600">${formatCurrency(cat.recebido)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-blue-600">${formatCurrency(cat.aReceber)}</td>
+                </tr>
+            `;
+        }
+
+        html += `</tbody></table></div>`;
+        return html;
+    }
+
+    function renderPrevisaoRecebimentos(dados) {
+        const hoje = new Date();
+        const previsoes = {}; // Ex: { '2023-10': 150000, '2023-11': 200000 }
+
+        dados.forEach(d => {
+            const dataVencimento = new Date(d.dataVencimento + 'T00:00:00');
+            if (dataVencimento >= hoje) {
+                const mesAno = `${dataVencimento.getFullYear()}-${String(dataVencimento.getMonth() + 1).padStart(2, '0')}`;
+                if (!previsoes[mesAno]) {
+                    previsoes[mesAno] = 0;
+                }
+                previsoes[mesAno] += d.saldoPendente || 0;
+            }
+        });
+
+        if (Object.keys(previsoes).length === 0) {
+            return `<p class="text-center text-gray-500 py-12">Nenhum recebimento futuro encontrado.</p>`;
+        }
+
+        let html = `
+            <div class="space-y-4">
+                <h3 class="text-lg font-semibold">Previsão Mensal de Recebimentos</h3>`;
+
+        const mesesOrdenados = Object.keys(previsoes).sort();
+
+        mesesOrdenados.forEach(mesAno => {
+            const [ano, mes] = mesAno.split('-');
+            const nomeMes = new Date(ano, mes - 1, 1).toLocaleString('pt-BR', { month: 'long' });
+            html += `
+                <div class="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
+                    <span class="font-medium text-blue-800">${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} de ${ano}</span>
+                    <span class="font-bold text-xl text-blue-900">${formatCurrency(previsoes[mesAno])}</span>
+                </div>`;
+        });
+
+        html += `</div>`;
         return html;
     }
 
