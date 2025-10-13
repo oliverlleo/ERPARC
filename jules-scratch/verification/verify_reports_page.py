@@ -1,49 +1,65 @@
-import asyncio
-from playwright.async_api import async_playwright, expect
-import os
 import re
+from playwright.sync_api import sync_playwright, Page, expect
 
-async def main():
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+def run(playwright):
+    browser = playwright.chromium.launch(headless=True)
+    context = browser.new_context()
+    page = context.new_page()
 
-        # Get the absolute path to the index.html file
-        file_path = os.path.abspath('index.html')
+    try:
+        # Navigate to the local index.html file using the correct absolute path
+        page.goto("file:///app/index.html")
 
-        # Go to the local file
-        await page.goto(f'file://{file_path}')
+        # Wait for a key element in the login form to be visible. This is more robust.
+        expect(page.get_by_text("Bem-vindo de volta")).to_be_visible(timeout=15000)
 
-        # Wait for the login page to have the 'visible' class. This is more robust.
-        await expect(page.locator("#login-page")).to_have_class(re.compile(r'\bvisible\b'))
+        # Now that we know the content is ready, we can check the container's visibility
+        expect(page.locator("#login-page")).to_be_visible()
 
-        # Fill in the login form for the test user
-        await page.locator("#admin-login-link").click()
-        await expect(page.locator("#admin-login-modal")).to_be_visible()
-        await page.locator("#admin-login-email").fill("test.user@email.com")
-        await page.locator("#admin-login-password").fill("password")
-        await page.locator("#admin-login-form button[type='submit']").click()
+        # Log in as the test user
+        page.locator("#login-empresa").select_option(label="Empresa Teste")
+        page.locator("#login-usuario").fill("test.user@email.com")
+        page.locator("#login-password").fill("password")
+        page.locator("button[type='submit']").click()
 
-        # Wait for the main page to become visible after login
-        await expect(page.locator("#main-page")).to_have_class(re.compile(r'\bvisible\b'))
+        # Wait for the main page to load after login
+        expect(page.locator("#main-page")).to_be_visible(timeout=15000)
 
-        # Click the "Financeiro" dropdown and then the "Relatórios" link
-        await page.locator("#financeiro-nav-link").click()
-        await page.locator("#financeiro-dropdown a[data-target='relatorios-page']").click()
+        # Click the "Financeiro" dropdown. There are multiple, so we target the one in the visible header.
+        page.locator("#main-page header >> text=Financeiro").click()
 
-        # Wait for the reports page to be visible
-        await expect(page.locator("#relatorios-page")).to_have_class(re.compile(r'\bvisible\b'))
+        # Click the "Relatórios" link in the dropdown
+        page.locator("#financeiro-dropdown >> text=Relatórios").click()
 
-        # Assert that the main report container is visible
-        await expect(page.locator("#contas-a-receber-reports-section")).to_be_visible()
+        # Verify that the Relatórios page is now visible
+        expect(page.locator("#relatorios-page")).to_be_visible(timeout=10000)
+        expect(page.locator("#relatorios-page h1")).to_have_text("Relatórios")
 
-        # Assert that the report tabs are present
-        await expect(page.locator("a[data-report='posicao-carteira']")).to_be_visible()
-        await expect(page.locator("a[data-report='inadimplencia']")).to_be_visible()
+        # Click through the report tabs to ensure they are all present
+        page.get_by_role("link", name="Posição de Carteira").click()
+        expect(page.locator("#posicao-carteira-report-content")).to_be_visible()
 
-        # Take a screenshot of the reports page
-        await page.screenshot(path="jules-scratch/verification/verification.png")
+        page.get_by_role("link", name="Análise de Inadimplência").click()
+        expect(page.locator("#inadimplencia-report-content")).to_be_visible()
 
-        await browser.close()
+        page.get_by_role("link", name="Previsão de Recebimentos").click()
+        expect(page.locator("#previsao-recebimentos-report-content")).to_be_visible()
 
-asyncio.run(main())
+        page.get_by_role("link", name="Análise por Categoria").click()
+        expect(page.locator("#analise-categorias-report-content")).to_be_visible()
+
+        page.get_by_role("link", name="Ranking de Clientes").click()
+        expect(page.locator("#ranking-clientes-report-content")).to_be_visible()
+
+        # Take a screenshot of the final state
+        page.screenshot(path="jules-scratch/verification/verification.png")
+        print("Screenshot taken successfully.")
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        page.screenshot(path="jules-scratch/verification/error_screenshot.png")
+    finally:
+        browser.close()
+
+with sync_playwright() as playwright:
+    run(playwright)
