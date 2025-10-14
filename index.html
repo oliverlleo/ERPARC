@@ -161,6 +161,7 @@
                     <div class="mt-1">
                         <select id="login-empresa" name="empresa" required class="form-select block w-full rounded-lg border-gray-300 bg-[var(--brand-secondary)] p-3 shadow-sm focus:border-[var(--brand-primary)] focus:ring focus:ring-[var(--brand-primary)] focus:ring-opacity-50 text-base">
                            <option value="" disabled selected>Selecione a empresa</option>
+                           <option value="test-company-id">Test Company</option>
                            <!-- Options will be populated dynamically -->
                         </select>
                     </div>
@@ -217,6 +218,7 @@
                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
                         </div>
                     </div>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
@@ -437,6 +439,7 @@
                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
                         </div>
                     </div>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
@@ -1286,6 +1289,7 @@
                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
                         </div>
                     </div>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
@@ -1826,6 +1830,7 @@
                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
                         </div>
                     </div>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
@@ -2382,6 +2387,7 @@
                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
                         </div>
                     </div>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
@@ -2849,6 +2855,133 @@
       </div>
   </div>
 
+    <div id="relatorios-page" class="view-container min-h-screen w-full">
+         <div class="relative flex size-full min-h-screen flex-col group/design-root w-full">
+            <div class="layout-container flex h-full grow flex-col w-full">
+                <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-10 py-3">
+                    <a href="#" class="flex items-center gap-4 text-gray-800 nav-link" data-target="main-page">
+                        <div class="size-8 text-[var(--primary-color)]">
+                            <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M4 8L24 4L44 8L24 12L4 8Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 24L24 20L44 24L24 28L4 24Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 40L24 36L44 40L24 44L4 40Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path></svg>
+                        </div>
+                        <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
+                    </a>
+                    <nav class="flex items-center gap-8">
+                        <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
+                        <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
+                        <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
+                        <div class="relative">
+                            <button id="financeiro-nav-link-relatorios" class="text-[var(--primary-color)] text-sm font-medium leading-normal flex items-center gap-1">
+                                <span>Financeiro</span>
+                                <span class="material-symbols-outlined text-base">expand_more</span>
+                            </button>
+                            <div id="financeiro-dropdown-relatorios" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                                <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
+                                <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
+                                <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
+                                <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                                <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
+                            </div>
+                        </div>
+                        <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
+                    </nav>
+                     <div class="flex items-center gap-4">
+                        <button id="notification-bell-relatorios" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                            <span class="material-symbols-outlined text-gray-600">notifications</span>
+                            <span id="notification-indicator-relatorios" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                        </button>
+                        <div class="relative">
+                            <button id="profile-button-relatorios" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
+                            <div id="profile-dropdown-relatorios" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                                <div class="px-4 py-2 text-sm text-gray-700 border-b">
+                                    <p class="font-medium">Logado como:</p>
+                                    <p id="user-email-relatorios" class="truncate"></p>
+                                </div>
+                                <a href="#" id="logout-button-relatorios" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+                <main class="flex-1 px-10 py-8 bg-gray-50">
+                    <div class="layout-content-container mx-auto flex max-w-7xl flex-col gap-8">
+                        <div class="flex flex-col gap-2">
+                            <h1 class="text-gray-900 text-3xl font-bold leading-tight tracking-tight">Relatórios Financeiros</h1>
+                            <p class="text-gray-600 text-base font-normal leading-normal">Gere e visualize relatórios analíticos de Contas a Receber.</p>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm w-full">
+                             <div class="border-b border-gray-200">
+                                <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                                    <button type="button" class="relatorio-tab-link active border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-relatorio-tab="contas-a-receber">Contas a Receber</button>
+                                    <button type="button" class="relatorio-tab-link border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-relatorio-tab="contas-a-pagar">Contas a Pagar</button>
+                                </nav>
+                            </div>
+
+                            <div id="relatorio-contas-a-receber-tab" class="relatorio-tab-content pt-6">
+                                <h2 class="text-xl font-semibold text-gray-900 mb-4">Relatório: Posição de Carteira</h2>
+                                <div class="flex flex-wrap items-end gap-4 mb-6 p-4 bg-gray-50 rounded-lg border">
+                                    <div class="flex-grow min-w-[200px]">
+                                        <label for="relatorio-receber-tipo" class="block text-sm font-medium text-gray-700">Tipo de Relatório</label>
+                                        <select id="relatorio-receber-tipo" class="form-select mt-1 block w-full">
+                                            <option value="posicao-carteira">Posição de Carteira</option>
+                                            <option value="inadimplencia">Análise de Inadimplência</option>
+                                            <option value="previsao">Previsão de Recebimentos</option>
+                                            <option value="categoria">Análise por Categoria</option>
+                                        </select>
+                                    </div>
+                                     <div class="flex-grow min-w-[150px]">
+                                        <label for="relatorio-receber-periodo-de" class="block text-sm font-medium text-gray-700">Período de (Vencimento)</label>
+                                        <input type="date" id="relatorio-receber-periodo-de" class="form-input mt-1 block w-full">
+                                    </div>
+                                    <div class="flex-grow min-w-[150px]">
+                                        <label for="relatorio-receber-periodo-ate" class="block text-sm font-medium text-gray-700">Até</label>
+                                        <input type="date" id="relatorio-receber-periodo-ate" class="form-input mt-1 block w-full">
+                                    </div>
+                                    <div class="flex-grow min-w-[200px]">
+                                        <label for="relatorio-receber-cliente" class="block text-sm font-medium text-gray-700">Cliente</label>
+                                        <select id="relatorio-receber-cliente" class="form-select mt-1 block w-full">
+                                            <option value="todos">Todos os Clientes</option>
+                                        </select>
+                                    </div>
+                                     <div class="flex-grow min-w-[150px]">
+                                        <label for="relatorio-receber-status" class="block text-sm font-medium text-gray-700">Status</label>
+                                        <select id="relatorio-receber-status" class="form-select mt-1 block w-full">
+                                            <option value="todos">Todos os Status</option>
+                                            <option value="Pendente">Pendentes</option>
+                                            <option value="Vencido">Vencidos</option>
+                                            <option value="Recebido Parcialmente">Parcialmente Recebidos</option>
+                                            <option value="Recebido">Recebidos</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <button id="gerar-relatorio-btn" class="inline-flex items-center justify-center rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700">
+                                            <span class="material-symbols-outlined text-base mr-2">analytics</span> Gerar Relatório
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div id="relatorio-resultados-container" class="mt-8">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h3 class="text-lg font-semibold text-gray-900">Resultados da Consulta</h3>
+                                        <button id="exportar-relatorio-btn" class="inline-flex items-center gap-2 justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 disabled:opacity-50" disabled>
+                                            <span class="material-symbols-outlined text-base">file_download</span> Exportar (.xlsx)
+                                        </button>
+                                    </div>
+                                    <div id="relatorio-visualizacao-area" class="min-h-[300px] bg-white p-4 rounded-lg border">
+                                        <p class="text-center text-gray-500 py-12">Selecione os filtros e clique em "Gerar Relatório".</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="relatorio-contas-a-pagar-tab" class="relatorio-tab-content hidden pt-6">
+                                <p class="text-gray-500">Funcionalidade de Relatórios de Contas a Pagar em desenvolvimento.</p>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+
   <!-- Modal de Login do Administrador -->
   <div id="admin-login-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
       <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
@@ -3215,6 +3348,7 @@
 
   <script type="module" src="fluxo-de-caixa.js"></script>
   <script type="module" src="movimentacao-bancaria.js"></script>
+  <script type="module" src="relatorios.js"></script>
   <script type="module">
     // Importações do Firebase SDK
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
@@ -3223,6 +3357,7 @@
     import { initializeFluxoDeCaixa } from './fluxo-de-caixa.js';
     import { initializeMovimentacaoBancaria } from './movimentacao-bancaria.js';
     import { initializeNotifications, initializeNotificationsPage } from './notifications.js';
+    import { initializeRelatorios } from './relatorios.js';
 
     // Configuração do Firebase
     const firebaseConfig = {
@@ -3362,6 +3497,8 @@
     const financeiroDropdownFluxo = document.getElementById('financeiro-dropdown-fluxo');
     const financeiroNavLinkNotifications = document.getElementById('financeiro-nav-link-notifications');
     const financeiroDropdownNotifications = document.getElementById('financeiro-dropdown-notifications');
+    const financeiroNavLinkRelatorios = document.getElementById('financeiro-nav-link-relatorios');
+    const financeiroDropdownRelatorios = document.getElementById('financeiro-dropdown-relatorios');
 
     // --- Elementos de Notificação ---
     const notificationSidebar = document.getElementById('notification-sidebar');
@@ -5034,6 +5171,7 @@
             initializeNotificationsPage(db, effectiveUserId);
             initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
             initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
+            initializeRelatorios(db, effectiveUserId, commonUtils);
             showView('main-page');
             updateStatusFilterUI();
             updateReceitaStatusFilterUI();
@@ -5055,6 +5193,7 @@
                 initializeNotificationsPage(db, effectiveUserId);
                 initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
                 initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
+                initializeRelatorios(db, effectiveUserId, commonUtils);
                 showView('main-page');
                 updateStatusFilterUI();
                 updateReceitaStatusFilterUI();
@@ -6667,6 +6806,7 @@
     setupDropdown(financeiroNavLinkFluxo, financeiroDropdownFluxo);
     setupDropdown(financeiroNavLinkMovimentacao, financeiroDropdownMovimentacao);
     setupDropdown(financeiroNavLinkNotifications, financeiroDropdownNotifications);
+    setupDropdown(financeiroNavLinkRelatorios, financeiroDropdownRelatorios);
 
     async function openModal(isEdit = false) {
         if(despesaModal) {
