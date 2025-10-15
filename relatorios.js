@@ -478,18 +478,18 @@ export function initializeRelatorios(db, userId, common) {
     }
 
     function renderPrevisaoDesembolsos(dados) {
-        const hoje = new Date();
         const previsoes = {};
 
+        // A previsão deve incluir tudo que está em aberto (Pendente, Vencido, Pago Parcialmente),
+        // independentemente se a data de vencimento já passou.
         dados.forEach(d => {
             const dataVencimento = new Date(d.vencimento + 'T00:00:00');
-            if (dataVencimento >= hoje) {
-                const mesAno = `${dataVencimento.getFullYear()}-${String(dataVencimento.getMonth() + 1).padStart(2, '0')}`;
-                if (!previsoes[mesAno]) {
-                    previsoes[mesAno] = 0;
-                }
-                previsoes[mesAno] += d.valorSaldo || 0;
+            const mesAno = `${dataVencimento.getFullYear()}-${String(dataVencimento.getMonth() + 1).padStart(2, '0')}`;
+
+            if (!previsoes[mesAno]) {
+                previsoes[mesAno] = 0;
             }
+            previsoes[mesAno] += d.valorSaldo || 0;
         });
 
         if (Object.keys(previsoes).length === 0) {
