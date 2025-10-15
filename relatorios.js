@@ -583,17 +583,6 @@ export function initializeRelatorios(db, userId, common) {
             const snapshot = await getDocs(q);
 
             relatorioDadosPagarBase = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-            // Adicionado para corrigir status de vencido
-            const hoje = new Date();
-            hoje.setHours(0, 0, 0, 0);
-            relatorioDadosPagarBase.forEach(d => {
-                const dataVencimento = new Date(d.vencimento + 'T00:00:00');
-                if ((d.status === 'Pendente' || d.status === 'Pago Parcialmente') && dataVencimento < hoje) {
-                    d.status = 'Vencido';
-                }
-            });
-
             processarRelatorioPagar(filtros.tipo, filtros);
 
         } catch (error) {
@@ -635,16 +624,6 @@ export function initializeRelatorios(db, userId, common) {
             relatorioDadosBase = snapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }))
                 .filter(d => d.status !== 'Desdobrado'); // Sempre excluir desdobrados da visão principal
-
-            // Adicionado para corrigir status de vencido
-            const hoje = new Date();
-            hoje.setHours(0, 0, 0, 0);
-            relatorioDadosBase.forEach(d => {
-                const dataVencimento = new Date(d.dataVencimento + 'T00:00:00');
-                if ((d.status === 'Pendente' || d.status === 'Recebido Parcialmente') && dataVencimento < hoje) {
-                    d.status = 'Vencido';
-                }
-            });
 
             processarRelatorioReceber(filtros.tipo, filtros);
 
