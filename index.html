@@ -3674,18 +3674,25 @@
         const startDate = startDateInputReceber.value;
         const endDate = endDateInputReceber.value;
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
         const filteredDocs = allReceitas.filter(doc => {
             const data = doc.data();
-            const status = data.status || 'Pendente';
+            let status = data.status || 'Pendente';
+            const vencimentoField = data.dataVencimento || data.vencimento;
+            const vencimento = new Date(vencimentoField + 'T00:00:00');
+
+            if (status === 'Pendente' && vencimento < today) {
+                status = 'Vencido';
+            }
 
             if (activeReceitaStatusFilters.size > 0 && !activeReceitaStatusFilters.has(status)) {
                 return false;
             }
 
             let dateMatch = true;
-            const vencimentoField = data.dataVencimento || data.vencimento;
             if (vencimentoField && (startDate || endDate)) {
-                const vencimento = new Date(vencimentoField + 'T00:00:00');
                 if (startDate && vencimento < new Date(startDate + 'T00:00:00')) dateMatch = false;
                 if (endDate && vencimento > new Date(endDate + 'T00:00:00')) dateMatch = false;
             }
@@ -3861,7 +3868,12 @@
 
         const events = docs.map(doc => {
             const data = doc.data();
-            const status = data.status || 'Pendente';
+            let status = data.status || 'Pendente';
+            const vencimento = new Date(data.vencimento + 'T00:00:00');
+
+            if (status === 'Pendente' && vencimento < today) {
+                status = 'Vencido';
+            }
 
             const colorMap = {
                 'Pago': '#16a34a', // green-600
@@ -5126,9 +5138,19 @@
     function processAndRenderReceberCalendarEvents(docs) {
         if (!calendarReceberInstance) return;
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
         const events = docs.map(doc => {
             const data = doc.data();
-            const status = data.status || 'Pendente';
+            let status = data.status || 'Pendente';
+            const vencimentoField = data.dataVencimento || data.vencimento;
+            const vencimento = new Date(vencimentoField + 'T00:00:00');
+
+            if (status === 'Pendente' && vencimento < today) {
+                status = 'Vencido';
+            }
+
             const colorMap = {
                 'Recebido': '#16a34a',
                 'Recebido Parcialmente': '#f59e0b',
@@ -6554,9 +6576,17 @@
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
         const filteredDocs = allDespesas.filter(doc => {
             const data = doc.data();
-            const status = data.status || 'Pendente';
+            let status = data.status || 'Pendente';
+            const vencimento = new Date(data.vencimento + 'T00:00:00');
+
+            if (status === 'Pendente' && vencimento < today) {
+                status = 'Vencido';
+            }
 
             // Status filter
             if (activeStatusFilters.size > 0 && !activeStatusFilters.has(status)) {
@@ -6566,7 +6596,6 @@
             // Date filter
             let dateMatch = true;
             if (startDate || endDate) {
-                const vencimento = new Date(data.vencimento + 'T00:00:00');
                 if (startDate && vencimento < new Date(startDate + 'T00:00:00')) {
                     dateMatch = false;
                 }
@@ -6618,16 +6647,25 @@
         if (docs.length === 0) {
             const tr = despesasTableBody.insertRow();
             const td = tr.insertCell();
-            td.colSpan = 11; // Adjusted for the new column
+            td.colSpan = 12;
             td.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center';
             td.textContent = 'Nenhuma despesa encontrada.';
             return;
         }
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
         docs.forEach(doc => {
             const data = doc.data();
             const tr = despesasTableBody.insertRow();
             tr.setAttribute('data-id', doc.id);
+
+            let statusText = data.status || 'Pendente';
+            const vencimento = new Date(data.vencimento + 'T00:00:00');
+            if (statusText === 'Pendente' && vencimento < today) {
+                statusText = 'Vencido';
+            }
 
             const statusClasses = {
                 'Pago': 'bg-green-100 text-green-800',
@@ -6635,7 +6673,6 @@
                 'Pendente': 'bg-blue-100 text-blue-800',
                 'Vencido': 'bg-red-100 text-red-800',
             };
-            const statusText = data.status || 'Pendente';
             const statusClass = statusClasses[statusText] || 'bg-gray-100 text-gray-800';
 
             const valorOriginal = data.valorOriginal || data.valor || 0;
@@ -8889,14 +8926,25 @@ function validateParcelasSum() {
         receitasTableBody.innerHTML = '';
         if (docs.length === 0) {
             const tr = receitasTableBody.insertRow();
-            tr.innerHTML = `<td colspan="11" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">Nenhuma receita encontrada.</td>`; // Adjusted colspan
+            tr.innerHTML = `<td colspan="11" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">Nenhuma receita encontrada.</td>`;
             return;
         }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
         docs.forEach(doc => {
             const data = doc.data();
             const tr = receitasTableBody.insertRow();
             tr.setAttribute('data-id', doc.id);
+
+            let statusText = data.status || 'Pendente';
+            const vencimentoField = data.dataVencimento || data.vencimento;
+            const vencimento = new Date(vencimentoField + 'T00:00:00');
+
+            if (statusText === 'Pendente' && vencimento < today) {
+                statusText = 'Vencido';
+            }
 
             const statusClasses = {
                 'Recebido': 'bg-green-100 text-green-800',
@@ -8905,7 +8953,6 @@ function validateParcelasSum() {
                 'Vencido': 'bg-red-100 text-red-800',
                 'Desdobrado': 'bg-gray-200 text-gray-800',
             };
-            const statusText = data.status || 'Pendente';
             const statusClass = statusClasses[statusText] || 'bg-gray-100 text-gray-800';
 
             const valorOriginal = data.valorOriginal || 0;
