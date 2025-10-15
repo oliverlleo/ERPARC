@@ -257,16 +257,17 @@ export function initializeRelatorios(db, userId, common) {
 
     function renderPrevisaoRecebimentos(dados) {
         const hoje = new Date();
-        const previsoes = {}; // Ex: { '2023-10': 150000, '2023-11': 200000 }
+        const previsoes = {};
 
         dados.forEach(d => {
             const dataVencimento = new Date(d.dataVencimento + 'T00:00:00');
             if (dataVencimento >= hoje) {
                 const mesAno = `${dataVencimento.getFullYear()}-${String(dataVencimento.getMonth() + 1).padStart(2, '0')}`;
                 if (!previsoes[mesAno]) {
-                    previsoes[mesAno] = 0;
+                    previsoes[mesAno] = { total: 0, items: [] };
                 }
-                previsoes[mesAno] += d.saldoPendente || 0;
+                previsoes[mesAno].total += d.saldoPendente || 0;
+                previsoes[mesAno].items.push(d);
             }
         });
 
@@ -274,20 +275,43 @@ export function initializeRelatorios(db, userId, common) {
             return `<p class="text-center text-gray-500 py-12">Nenhum recebimento futuro encontrado.</p>`;
         }
 
-        let html = `
-            <div class="space-y-4">
-                <h3 class="text-lg font-semibold">Previsão Mensal de Recebimentos</h3>`;
-
+        let html = `<div class="space-y-2"><h3 class="text-lg font-semibold mb-4">Previsão Mensal de Recebimentos</h3>`;
         const mesesOrdenados = Object.keys(previsoes).sort();
 
         mesesOrdenados.forEach(mesAno => {
             const [ano, mes] = mesAno.split('-');
             const nomeMes = new Date(ano, mes - 1, 1).toLocaleString('pt-BR', { month: 'long' });
             html += `
-                <div class="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
-                    <span class="font-medium text-blue-800">${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} de ${ano}</span>
-                    <span class="font-bold text-xl text-blue-900">${formatCurrency(previsoes[mesAno])}</span>
-                </div>`;
+                <div class="border rounded-lg overflow-hidden">
+                    <div class="flex justify-between items-center p-4 bg-blue-50 cursor-pointer hover:bg-blue-100 transition-colors previsao-accordion-header" data-target="previsao-receber-${mesAno}">
+                        <span class="font-medium text-blue-800">${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} de ${ano}</span>
+                        <div class="flex items-center">
+                            <span class="font-bold text-xl text-blue-900 mr-4">${formatCurrency(previsoes[mesAno].total)}</span>
+                            <span class="material-symbols-outlined text-blue-700 transition-transform transform">expand_more</span>
+                        </div>
+                    </div>
+                    <div id="previsao-receber-${mesAno}" class="hidden p-4">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Cliente</th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Descrição</th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Vencimento</th>
+                                    <th class="px-3 py-2 text-right font-medium text-gray-600">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+            previsoes[mesAno].items.forEach(item => {
+                html += `
+                    <tr class="border-b">
+                        <td class="px-3 py-2">${item.clienteNome}</td>
+                        <td class="px-3 py-2">${item.descricao}</td>
+                        <td class="px-3 py-2">${new Date(item.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                        <td class="px-3 py-2 text-right">${formatCurrency(item.saldoPendente)}</td>
+                    </tr>
+                `;
+            });
+            html += `</tbody></table></div></div>`;
         });
 
         html += `</div>`;
@@ -517,34 +541,59 @@ export function initializeRelatorios(db, userId, common) {
     function renderPrevisaoDesembolsos(dados) {
         const previsoes = {};
 
-        // A previsão deve incluir tudo que está em aberto (Pendente, Vencido, Pago Parcialmente),
-        // independentemente se a data de vencimento já passou.
         dados.forEach(d => {
             const dataVencimento = new Date(d.vencimento + 'T00:00:00');
             const mesAno = `${dataVencimento.getFullYear()}-${String(dataVencimento.getMonth() + 1).padStart(2, '0')}`;
-
             if (!previsoes[mesAno]) {
-                previsoes[mesAno] = 0;
+                previsoes[mesAno] = { total: 0, items: [] };
             }
-            previsoes[mesAno] += d.valorSaldo || 0;
+            previsoes[mesAno].total += d.valorSaldo || 0;
+            previsoes[mesAno].items.push(d);
         });
 
         if (Object.keys(previsoes).length === 0) {
             return `<p class="text-center text-gray-500 py-12">Nenhum desembolso futuro encontrado.</p>`;
         }
 
-        let html = `<div class="space-y-4"><h3 class="text-lg font-semibold">Previsão Mensal de Desembolsos</h3>`;
+        let html = `<div class="space-y-2"><h3 class="text-lg font-semibold mb-4">Previsão Mensal de Desembolsos</h3>`;
         const mesesOrdenados = Object.keys(previsoes).sort();
 
         mesesOrdenados.forEach(mesAno => {
             const [ano, mes] = mesAno.split('-');
             const nomeMes = new Date(ano, mes - 1, 1).toLocaleString('pt-BR', { month: 'long' });
             html += `
-                <div class="flex justify-between items-center p-4 bg-red-50 rounded-lg">
-                    <span class="font-medium text-red-800">${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} de ${ano}</span>
-                    <span class="font-bold text-xl text-red-900">${formatCurrency(previsoes[mesAno])}</span>
-                </div>`;
+                <div class="border rounded-lg overflow-hidden">
+                    <div class="flex justify-between items-center p-4 bg-red-50 cursor-pointer hover:bg-red-100 transition-colors previsao-accordion-header" data-target="previsao-pagar-${mesAno}">
+                        <span class="font-medium text-red-800">${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} de ${ano}</span>
+                        <div class="flex items-center">
+                            <span class="font-bold text-xl text-red-900 mr-4">${formatCurrency(previsoes[mesAno].total)}</span>
+                             <span class="material-symbols-outlined text-red-700 transition-transform transform">expand_more</span>
+                        </div>
+                    </div>
+                    <div id="previsao-pagar-${mesAno}" class="hidden p-4">
+                        <table class="min-w-full text-sm">
+                             <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Favorecido</th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Descrição</th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Vencimento</th>
+                                    <th class="px-3 py-2 text-right font-medium text-gray-600">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+            previsoes[mesAno].items.forEach(item => {
+                html += `
+                    <tr class="border-b">
+                        <td class="px-3 py-2">${item.favorecidoNome}</td>
+                        <td class="px-3 py-2">${item.descricao}</td>
+                        <td class="px-3 py-2">${new Date(item.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                        <td class="px-3 py-2 text-right">${formatCurrency(item.valorSaldo)}</td>
+                    </tr>
+                `;
+            });
+            html += `</tbody></table></div></div>`;
         });
+
         html += `</div>`;
         return html;
     }
@@ -714,7 +763,23 @@ export function initializeRelatorios(db, userId, common) {
         exportarRelatorioPagarBtn.disabled = true;
     });
 
+    function handleAccordionClick(e) {
+        const header = e.target.closest('.previsao-accordion-header');
+        if (!header) return;
+
+        const targetId = header.dataset.target;
+        const content = document.getElementById(targetId);
+        const icon = header.querySelector('.material-symbols-outlined');
+
+        if (content) {
+            content.classList.toggle('hidden');
+            icon.classList.toggle('rotate-180');
+        }
+    }
+
+    visualizacaoAreaReceber.addEventListener('click', handleAccordionClick);
     visualizacaoAreaPagar.addEventListener('click', (e) => {
+        handleAccordionClick(e); // Handle accordion for forecasts
         const card = e.target.closest('.atraso-card');
         if (!card) return;
 
