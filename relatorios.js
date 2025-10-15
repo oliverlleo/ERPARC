@@ -5,73 +5,113 @@ export function initializeRelatorios(db, userId, common) {
 
     const { formatCurrency, toCents, fromCents, showFeedback } = common;
 
-    // DOM Elements
-    const relatorioTipoSelect = document.getElementById('relatorio-receber-tipo');
-    const gerarRelatorioBtn = document.getElementById('gerar-relatorio-btn');
-    const exportarRelatorioBtn = document.getElementById('exportar-relatorio-btn');
-    const visualizacaoArea = document.getElementById('relatorio-visualizacao-area');
-    const periodoDeInput = document.getElementById('relatorio-receber-periodo-de');
-    const periodoAteInput = document.getElementById('relatorio-receber-periodo-ate');
-    const clienteSelect = document.getElementById('relatorio-receber-cliente');
-    const statusSelect = document.getElementById('relatorio-receber-status');
-    const tituloRelatorioEl = document.querySelector('#relatorio-contas-a-receber-tab h2');
+    // --- Elementos Comuns ---
+    const relatorioTabLinks = document.querySelectorAll('.relatorio-tab-link');
+    const relatorioTabContents = document.querySelectorAll('.relatorio-tab-content');
 
-    let relatorioDadosBase = [];
+    // --- Elementos Contas a Receber ---
+    const receberTipoSelect = document.getElementById('relatorio-receber-tipo');
+    const gerarRelatorioReceberBtn = document.getElementById('gerar-relatorio-btn');
+    const exportarRelatorioReceberBtn = document.getElementById('exportar-relatorio-btn');
+    const visualizacaoAreaReceber = document.getElementById('relatorio-visualizacao-area');
+    const receberPeriodoDeInput = document.getElementById('relatorio-receber-periodo-de');
+    const receberPeriodoAteInput = document.getElementById('relatorio-receber-periodo-ate');
+    const receberClienteSelect = document.getElementById('relatorio-receber-cliente');
+    const receberStatusSelect = document.getElementById('relatorio-receber-status');
+    const tituloRelatorioReceberEl = document.querySelector('#relatorio-contas-a-receber-tab h2');
+
+    // --- Elementos Contas a Pagar ---
+    const pagarTipoSelect = document.getElementById('relatorio-pagar-tipo');
+    const gerarRelatorioPagarBtn = document.getElementById('gerar-relatorio-pagar-btn');
+    const exportarRelatorioPagarBtn = document.getElementById('exportar-relatorio-pagar-btn');
+    const visualizacaoAreaPagar = document.getElementById('relatorio-pagar-visualizacao-area');
+    const pagarPeriodoDeInput = document.getElementById('relatorio-pagar-periodo-de');
+    const pagarPeriodoAteInput = document.getElementById('relatorio-pagar-periodo-ate');
+    const pagarBeneficiarioSelect = document.getElementById('relatorio-pagar-beneficiario');
+    const pagarStatusSelect = document.getElementById('relatorio-pagar-status');
+    const tituloRelatorioPagarEl = document.getElementById('relatorio-pagar-titulo');
+
+
+    let relatorioDadosBase = []; // Cache para dados de Contas a Receber
+    let relatorioDadosPagarBase = []; // Cache para dados de Contas a Pagar
     let clientesCache = [];
+    let beneficiariosCache = [];
 
-    // --- Utils para População de Dropdown ---
+
+    // --- Utils para População de Dropdowns ---
     async function populateClientesDropdown() {
         try {
             const clientesRef = collection(db, `users/${userId}/clientes`);
             const snapshot = await getDocs(clientesRef);
             clientesCache = snapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nome || doc.data().razaoSocial }));
 
-            clienteSelect.innerHTML = '<option value="todos">Todos os Clientes</option>';
+            receberClienteSelect.innerHTML = '<option value="todos">Todos os Clientes</option>';
             clientesCache.forEach(cliente => {
                 const option = document.createElement('option');
                 option.value = cliente.id;
                 option.textContent = cliente.nome;
-                clienteSelect.appendChild(option);
+                receberClienteSelect.appendChild(option);
             });
         } catch (error) {
             console.error("Erro ao carregar clientes para o relatório:", error);
         }
     }
 
-    // --- Funções de Lógica de Relatório ---
+    async function populateBeneficiariosDropdown() {
+        try {
+            const fornecedoresRef = collection(db, `users/${userId}/fornecedores`);
+            const funcionariosRef = collection(db, `users/${userId}/funcionarios`);
+            const [fornecedoresSnap, funcionariosSnap] = await Promise.all([getDocs(fornecedoresRef), getDocs(funcionariosRef)]);
 
-    function processarRelatorio(tipo, filtros) {
+            const fornecedores = fornecedoresSnap.docs.map(doc => ({ id: doc.id, nome: doc.data().dadosPrincipais.nomeFantasia || doc.data().dadosPrincipais.razaoSocial, tipo: 'Fornecedor' }));
+            const funcionarios = funcionariosSnap.docs.map(doc => ({ id: doc.id, nome: doc.data().pessoal.nomeCompleto, tipo: 'Funcionário' }));
+            beneficiariosCache = [...fornecedores, ...funcionarios];
+
+            pagarBeneficiarioSelect.innerHTML = '<option value="todos">Todos</option>';
+            beneficiariosCache.forEach(ben => {
+                const option = document.createElement('option');
+                option.value = ben.id;
+                option.textContent = `${ben.nome} (${ben.tipo})`;
+                pagarBeneficiarioSelect.appendChild(option);
+            });
+        } catch (error) {
+            console.error("Erro ao carregar beneficiários:", error);
+        }
+    }
+
+
+    // --- Funções de Lógica de Relatório (Contas a Receber) ---
+
+    function processarRelatorioReceber(tipo, filtros) {
         let dadosParaRenderizar;
 
-        // Client-side filtering based on the report type
         switch (tipo) {
             case 'posicao-carteira':
                 dadosParaRenderizar = (filtros.status === 'todos')
                     ? relatorioDadosBase
                     : relatorioDadosBase.filter(d => d.status === filtros.status);
-                visualizacaoArea.innerHTML = renderPosicaoCarteira(dadosParaRenderizar, filtros);
+                visualizacaoAreaReceber.innerHTML = renderPosicaoCarteira(dadosParaRenderizar);
                 break;
             case 'inadimplencia':
-                // Pass all non-paid items to the function, it will filter by date.
                 dadosParaRenderizar = relatorioDadosBase.filter(d => d.status === 'Pendente' || d.status === 'Vencido' || d.status === 'Recebido Parcialmente');
-                visualizacaoArea.innerHTML = renderInadimplencia(dadosParaRenderizar);
+                visualizacaoAreaReceber.innerHTML = renderInadimplencia(dadosParaRenderizar);
                 break;
             case 'previsao':
                 dadosParaRenderizar = relatorioDadosBase.filter(d => d.status === 'Pendente' || d.status === 'Recebido Parcialmente');
-                visualizacaoArea.innerHTML = renderPrevisaoRecebimentos(dadosParaRenderizar);
+                visualizacaoAreaReceber.innerHTML = renderPrevisaoRecebimentos(dadosParaRenderizar);
                 break;
             case 'categoria':
-                dadosParaRenderizar = relatorioDadosBase; // All data, will be grouped inside
-                visualizacaoArea.innerHTML = renderAnaliseCategoria(dadosParaRenderizar);
+                dadosParaRenderizar = relatorioDadosBase;
+                visualizacaoAreaReceber.innerHTML = renderAnaliseCategoria(dadosParaRenderizar);
                 break;
             default:
-                visualizacaoArea.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione um tipo de relatório e clique em "Gerar Relatório".</p>`;
-                exportarRelatorioBtn.disabled = true;
+                visualizacaoAreaReceber.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione um tipo de relatório e clique em "Gerar Relatório".</p>`;
+                exportarRelatorioReceberBtn.disabled = true;
                 return;
         }
 
-        exportarRelatorioBtn.disabled = dadosParaRenderizar.length === 0;
-        tituloRelatorioEl.textContent = `Relatório: ${relatorioTipoSelect.options[relatorioTipoSelect.selectedIndex].textContent}`;
+        exportarRelatorioReceberBtn.disabled = dadosParaRenderizar.length === 0;
+        tituloRelatorioReceberEl.textContent = `Relatório: ${receberTipoSelect.options[receberTipoSelect.selectedIndex].textContent}`;
     }
 
     function renderInadimplencia(dados) {
@@ -254,7 +294,7 @@ export function initializeRelatorios(db, userId, common) {
         return html;
     }
 
-    function renderPosicaoCarteira(dados, filtros) {
+    function renderPosicaoCarteira(dados) {
         let html = `
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -298,91 +338,352 @@ export function initializeRelatorios(db, userId, common) {
         return html;
     }
 
+    // --- Funções de Lógica de Relatório (Contas a Pagar) ---
+    function processarRelatorioPagar(tipo, filtros) {
+        let dadosParaRenderizar;
+
+        // Client-side filtering
+        let dadosFiltrados = relatorioDadosPagarBase.filter(d => {
+            const beneficiarioMatch = filtros.beneficiarioId === 'todos' || d.favorecidoId === filtros.beneficiarioId;
+            const statusMatch = filtros.status === 'todos' || d.status === filtros.status;
+            return beneficiarioMatch && statusMatch;
+        });
+
+        switch (tipo) {
+            case 'posicao-carteira-pagar':
+                dadosParaRenderizar = dadosFiltrados;
+                visualizacaoAreaPagar.innerHTML = renderPosicaoCarteiraPagar(dadosParaRenderizar);
+                break;
+            case 'analise-atraso':
+                 dadosParaRenderizar = dadosFiltrados.filter(d => d.status === 'Pendente' || d.status === 'Vencido' || d.status === 'Pago Parcialmente');
+                 visualizacaoAreaPagar.innerHTML = renderAnaliseAtraso(dadosParaRenderizar);
+                break;
+            case 'previsao-desembolsos':
+                dadosParaRenderizar = dadosFiltrados.filter(d => d.status === 'Pendente' || d.status === 'Pago Parcialmente');
+                visualizacaoAreaPagar.innerHTML = renderPrevisaoDesembolsos(dadosParaRenderizar);
+                break;
+            case 'analise-despesas':
+                 dadosParaRenderizar = dadosFiltrados;
+                 visualizacaoAreaPagar.innerHTML = renderAnaliseDespesas(dadosParaRenderizar);
+                break;
+            default:
+                visualizacaoAreaPagar.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione um tipo de relatório e clique em "Gerar Relatório".</p>`;
+                exportarRelatorioPagarBtn.disabled = true;
+                return;
+        }
+
+        exportarRelatorioPagarBtn.disabled = dadosParaRenderizar.length === 0;
+        tituloRelatorioPagarEl.textContent = `Relatório: ${pagarTipoSelect.options[pagarTipoSelect.selectedIndex].textContent}`;
+    }
+
+    function renderPosicaoCarteiraPagar(dados) {
+        let html = `
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Número Doc.</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Favorecido</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vencimento</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor Original</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Saldo Devedor</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">`;
+
+        if (dados.length === 0) {
+            html += `<tr><td colspan="7" class="text-center p-8 text-gray-500">Nenhum título encontrado.</td></tr>`;
+        } else {
+            dados.forEach(d => {
+                const statusClasses = { 'Pago': 'bg-green-100 text-green-800', 'Vencido': 'bg-red-100 text-red-800', 'Pendente': 'bg-blue-100 text-blue-800', 'Pago Parcialmente': 'bg-yellow-100 text-yellow-800' };
+                const statusText = d.status || 'Pendente';
+                const statusClass = statusClasses[statusText] || 'bg-gray-100 text-gray-800';
+
+                html += `
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.numeroDocumento || 'N/A'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.descricao}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.favorecidoNome}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${new Date(d.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${formatCurrency(d.valorOriginal)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">${formatCurrency(d.valorSaldo)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">
+                                ${statusText}
+                            </span>
+                        </td>
+                    </tr>`;
+            });
+        }
+        html += `</tbody></table></div>`;
+        return html;
+    }
+
+    function renderAnaliseAtraso(dados) {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        const dadosComAtraso = dados
+            .filter(d => {
+                const dataVencimento = new Date(d.vencimento + 'T00:00:00');
+                return dataVencimento < hoje && (d.status === 'Pendente' || d.status === 'Vencido' || d.status === 'Pago Parcialmente');
+            })
+            .map(d => {
+                const dataVencimento = new Date(d.vencimento + 'T00:00:00');
+                const diffTime = Math.abs(hoje - dataVencimento);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return { ...d, diasAtraso: diffDays };
+            });
+
+        if (dadosComAtraso.length === 0) {
+            return `<p class="text-center text-gray-500 py-12">Nenhum título vencido encontrado.</p>`;
+        }
+
+        const buckets = {
+            '30': { total: 0, items: [] },
+            '60': { total: 0, items: [] },
+            '90': { total: 0, items: [] },
+            '91+': { total: 0, items: [] }
+        };
+
+        dadosComAtraso.forEach(d => {
+            const saldo = d.valorSaldo || 0;
+            if (d.diasAtraso <= 30) buckets['30'].total += saldo;
+            else if (d.diasAtraso <= 60) buckets['60'].total += saldo;
+            else if (d.diasAtraso <= 90) buckets['90'].total += saldo;
+            else buckets['91+'].total += saldo;
+        });
+
+        let html = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">';
+        const bucketData = [
+            { label: 'Vencidos até 30 dias', key: '30', color: 'yellow' },
+            { label: 'Vencidos de 31 a 60 dias', key: '60', color: 'orange' },
+            { label: 'Vencidos de 61 a 90 dias', key: '90', color: 'red' },
+            { label: 'Vencidos há mais de 90 dias', key: '91+', color: 'red' }
+        ];
+
+        bucketData.forEach(bucketInfo => {
+            const total = buckets[bucketInfo.key].total;
+            const colorClass = total > 0 ? `text-${bucketInfo.color}-600` : 'text-gray-700';
+            html += `
+                <div class="bg-white p-4 rounded-lg border shadow-sm">
+                    <h4 class="text-gray-600 text-sm font-medium">${bucketInfo.label}</h4>
+                    <p class="text-3xl font-bold ${colorClass} mt-2">${formatCurrency(total)}</p>
+                </div>`;
+        });
+        html += '</div>';
+        return html;
+    }
+
+    function renderPrevisaoDesembolsos(dados) {
+        const hoje = new Date();
+        const previsoes = {};
+
+        dados.forEach(d => {
+            const dataVencimento = new Date(d.vencimento + 'T00:00:00');
+            if (dataVencimento >= hoje) {
+                const mesAno = `${dataVencimento.getFullYear()}-${String(dataVencimento.getMonth() + 1).padStart(2, '0')}`;
+                if (!previsoes[mesAno]) {
+                    previsoes[mesAno] = 0;
+                }
+                previsoes[mesAno] += d.valorSaldo || 0;
+            }
+        });
+
+        if (Object.keys(previsoes).length === 0) {
+            return `<p class="text-center text-gray-500 py-12">Nenhum desembolso futuro encontrado.</p>`;
+        }
+
+        let html = `<div class="space-y-4"><h3 class="text-lg font-semibold">Previsão Mensal de Desembolsos</h3>`;
+        const mesesOrdenados = Object.keys(previsoes).sort();
+
+        mesesOrdenados.forEach(mesAno => {
+            const [ano, mes] = mesAno.split('-');
+            const nomeMes = new Date(ano, mes - 1, 1).toLocaleString('pt-BR', { month: 'long' });
+            html += `
+                <div class="flex justify-between items-center p-4 bg-red-50 rounded-lg">
+                    <span class="font-medium text-red-800">${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} de ${ano}</span>
+                    <span class="font-bold text-xl text-red-900">${formatCurrency(previsoes[mesAno])}</span>
+                </div>`;
+        });
+        html += `</div>`;
+        return html;
+    }
+
+    function renderAnaliseDespesas(dados) {
+        if (dados.length === 0) {
+            return `<p class="text-center text-gray-500 py-12">Nenhum dado encontrado para analisar.</p>`;
+        }
+
+        const categorias = {};
+        dados.forEach(d => {
+            const categoriaId = d.categoriaId || 'sem-categoria';
+            const categoriaNome = d.categoriaNome || 'Sem Categoria';
+            if (!categorias[categoriaId]) {
+                categorias[categoriaId] = { nome: categoriaNome, totalOriginal: 0, totalPago: 0, aPagar: 0 };
+            }
+            categorias[categoriaId].totalOriginal += d.valorOriginal || 0;
+            categorias[categoriaId].totalPago += d.totalPago || 0;
+            categorias[categoriaId].aPagar += d.valorSaldo || 0;
+        });
+
+        let html = `
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoria</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total (Original)</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Pago</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total a Pagar</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">`;
+
+        Object.values(categorias).sort((a,b) => b.totalOriginal - a.totalOriginal).forEach(cat => {
+            html += `
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${cat.nome}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-bold">${formatCurrency(cat.totalOriginal)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-green-600">${formatCurrency(cat.totalPago)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-red-600">${formatCurrency(cat.aPagar)}</td>
+                </tr>
+            `;
+        });
+        html += `</tbody></table></div>`;
+        return html;
+    }
+
     // --- Event Handlers ---
 
-    gerarRelatorioBtn.addEventListener('click', async () => {
-        gerarRelatorioBtn.disabled = true;
-        gerarRelatorioBtn.innerHTML = '<span class="material-symbols-outlined text-base mr-2 animate-spin">refresh</span> Gerando...';
-        visualizacaoArea.innerHTML = `<p class="text-center text-gray-500 py-12"><span class="material-symbols-outlined text-2xl animate-spin">sync</span> Carregando dados...</p>`;
+    gerarRelatorioPagarBtn.addEventListener('click', async () => {
+        gerarRelatorioPagarBtn.disabled = true;
+        gerarRelatorioPagarBtn.innerHTML = '<span class="material-symbols-outlined text-base mr-2 animate-spin">refresh</span> Gerando...';
+        visualizacaoAreaPagar.innerHTML = `<p class="text-center text-gray-500 py-12"><span class="material-symbols-outlined text-2xl animate-spin">sync</span> Carregando dados...</p>`;
 
         const filtros = {
-            periodoDe: periodoDeInput.value,
-            periodoAte: periodoAteInput.value,
-            clienteId: clienteSelect.value,
-            status: statusSelect.value,
-            tipo: relatorioTipoSelect.value
+            periodoDe: pagarPeriodoDeInput.value,
+            periodoAte: pagarPeriodoAteInput.value,
+            beneficiarioId: pagarBeneficiarioSelect.value,
+            status: pagarStatusSelect.value,
+            tipo: pagarTipoSelect.value
         };
 
         try {
-            // Build a simpler, more robust base query
+            let q = collection(db, `users/${userId}/despesas`);
+            let queryConstraints = [];
+
+            if (filtros.periodoDe) queryConstraints.push(where("vencimento", ">=", filtros.periodoDe));
+            if (filtros.periodoAte) queryConstraints.push(where("vencimento", "<=", filtros.periodoAte));
+            queryConstraints.push(orderBy("vencimento", "asc"));
+
+            q = query(q, ...queryConstraints);
+            const snapshot = await getDocs(q);
+
+            relatorioDadosPagarBase = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            processarRelatorioPagar(filtros.tipo, filtros);
+
+        } catch (error) {
+            console.error("Erro ao gerar relatório de Contas a Pagar:", error);
+            visualizacaoAreaPagar.innerHTML = `<p class="text-center text-red-500 py-12">Erro ao carregar o relatório: ${error.message}</p>`;
+        } finally {
+            gerarRelatorioPagarBtn.disabled = false;
+            gerarRelatorioPagarBtn.innerHTML = '<span class="material-symbols-outlined text-base mr-2">analytics</span> Gerar Relatório';
+        }
+    });
+
+    gerarRelatorioReceberBtn.addEventListener('click', async () => {
+        gerarRelatorioReceberBtn.disabled = true;
+        gerarRelatorioReceberBtn.innerHTML = '<span class="material-symbols-outlined text-base mr-2 animate-spin">refresh</span> Gerando...';
+        visualizacaoAreaReceber.innerHTML = `<p class="text-center text-gray-500 py-12"><span class="material-symbols-outlined text-2xl animate-spin">sync</span> Carregando dados...</p>`;
+
+        const filtros = {
+            periodoDe: receberPeriodoDeInput.value,
+            periodoAte: receberPeriodoAteInput.value,
+            clienteId: receberClienteSelect.value,
+            status: receberStatusSelect.value,
+            tipo: receberTipoSelect.value
+        };
+
+        try {
             let q = collection(db, `users/${userId}/receitas`);
             let queryConstraints = [];
 
-            if (filtros.periodoDe) {
-                queryConstraints.push(where("dataVencimento", ">=", filtros.periodoDe));
-            }
-            if (filtros.periodoAte) {
-                queryConstraints.push(where("dataVencimento", "<=", filtros.periodoAte));
-            }
+            if (filtros.periodoDe) queryConstraints.push(where("dataVencimento", ">=", filtros.periodoDe));
+            if (filtros.periodoAte) queryConstraints.push(where("dataVencimento", "<=", filtros.periodoAte));
+            if (filtros.clienteId !== 'todos') queryConstraints.push(where("clienteId", "==", filtros.clienteId));
 
-            // IMPORTANT: No status or client filter here. It will be done on the client to avoid complex query issues.
+            // Status é filtrado no lado do cliente para incluir lógicas complexas (ex: Vencido) e evitar queries compostas
             queryConstraints.push(orderBy("dataVencimento", "asc"));
 
             q = query(q, ...queryConstraints);
             const snapshot = await getDocs(q);
 
-            // Filter client and status on the client side
             relatorioDadosBase = snapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(d => {
-                    const clienteMatch = filtros.clienteId === 'todos' || d.clienteId === filtros.clienteId;
-                    const statusMatch = d.status !== 'Desdobrado';
-                    return clienteMatch && statusMatch;
-                });
+                .filter(d => d.status !== 'Desdobrado'); // Sempre excluir desdobrados da visão principal
 
-            processarRelatorio(filtros.tipo, filtros);
+            processarRelatorioReceber(filtros.tipo, filtros);
 
         } catch (error) {
             console.error("Erro ao gerar relatório:", error);
-            visualizacaoArea.innerHTML = `<p class="text-center text-red-500 py-12">Erro ao carregar o relatório: ${error.message}</p>`;
+            visualizacaoAreaReceber.innerHTML = `<p class="text-center text-red-500 py-12">Erro ao carregar o relatório: ${error.message}</p>`;
         } finally {
-            gerarRelatorioBtn.disabled = false;
-            gerarRelatorioBtn.innerHTML = '<span class="material-symbols-outlined text-base mr-2">analytics</span> Gerar Relatório';
+            gerarRelatorioReceberBtn.disabled = false;
+            gerarRelatorioReceberBtn.innerHTML = '<span class="material-symbols-outlined text-base mr-2">analytics</span> Gerar Relatório';
         }
     });
 
-    function toggleReportFilters() {
-        const selectedType = relatorioTipoSelect.value;
-        const statusFilterContainer = statusSelect.parentElement;
+    function toggleReportFilters(selectElement, statusElement) {
+        const selectedType = selectElement.value;
+        const statusContainer = statusElement.parentElement;
 
-        if (selectedType === 'inadimplencia') {
-            statusFilterContainer.classList.add('hidden');
+        // Oculta o status para relatórios de aging/análise de atraso
+        if (selectedType === 'inadimplencia' || selectedType === 'analise-atraso') {
+            statusContainer.classList.add('hidden');
         } else {
-            statusFilterContainer.classList.remove('hidden');
+            statusContainer.classList.remove('hidden');
         }
     }
 
-    relatorioTipoSelect.addEventListener('change', () => {
-        toggleReportFilters();
-        // Reinicia a visualização e os dados ao trocar o tipo de relatório
+    receberTipoSelect.addEventListener('change', () => {
+        toggleReportFilters(receberTipoSelect, receberStatusSelect);
         if (relatorioDadosBase.length > 0) {
-            processarRelatorio(relatorioTipoSelect.value, { periodoDe: periodoDeInput.value, periodoAte: periodoAteInput.value, clienteId: clienteSelect.value, status: statusSelect.value, tipo: relatorioTipoSelect.value });
+            processarRelatorioReceber(receberTipoSelect.value, {
+                periodoDe: receberPeriodoDeInput.value,
+                periodoAte: receberPeriodoAteInput.value,
+                clienteId: receberClienteSelect.value,
+                status: receberStatusSelect.value,
+                tipo: receberTipoSelect.value
+            });
         } else {
-             tituloRelatorioEl.textContent = `Relatório: ${relatorioTipoSelect.options[relatorioTipoSelect.selectedIndex].textContent}`;
-             visualizacaoArea.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione os filtros e clique em "Gerar Relatório".</p>`;
-             exportarRelatorioBtn.disabled = true;
+             tituloRelatorioReceberEl.textContent = `Relatório: ${receberTipoSelect.options[receberTipoSelect.selectedIndex].textContent}`;
+             visualizacaoAreaReceber.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione os filtros e clique em "Gerar Relatório".</p>`;
+             exportarRelatorioReceberBtn.disabled = true;
         }
     });
 
-    // Exportação (Mock inicial, a lógica de exportação real será implementada posteriormente)
-    exportarRelatorioBtn.addEventListener('click', () => {
-         alert('Funcionalidade de exportação em desenvolvimento. Os dados seriam convertidos em CSV/XLSX.');
+    pagarTipoSelect.addEventListener('change', () => {
+        toggleReportFilters(pagarTipoSelect, pagarStatusSelect);
+        // Lógica similar para Contas a Pagar
+        tituloRelatorioPagarEl.textContent = `Relatório: ${pagarTipoSelect.options[pagarTipoSelect.selectedIndex].textContent}`;
+        visualizacaoAreaPagar.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione os filtros e clique em "Gerar Relatório".</p>`;
+        exportarRelatorioPagarBtn.disabled = true;
     });
 
-    // Setup das abas (Contas a Receber / Contas a Pagar)
-    const relatorioTabLinks = document.querySelectorAll('.relatorio-tab-link');
-    const relatorioTabContents = document.querySelectorAll('.relatorio-tab-content');
 
+    // --- Exportação ---
+    exportarRelatorioReceberBtn.addEventListener('click', () => {
+         alert('Funcionalidade de exportação em desenvolvimento.');
+    });
+     exportarRelatorioPagarBtn.addEventListener('click', () => {
+         alert('Funcionalidade de exportação em desenvolvimento.');
+    });
+
+
+    // --- Setup Inicial ---
     relatorioTabLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
@@ -395,7 +696,8 @@ export function initializeRelatorios(db, userId, common) {
         });
     });
 
-    // Chamadas iniciais
     populateClientesDropdown();
-    toggleReportFilters();
+    populateBeneficiariosDropdown();
+    toggleReportFilters(receberTipoSelect, receberStatusSelect);
+    toggleReportFilters(pagarTipoSelect, pagarStatusSelect);
 }
