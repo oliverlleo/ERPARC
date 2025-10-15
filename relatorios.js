@@ -458,22 +458,59 @@ export function initializeRelatorios(db, userId, common) {
 
         let html = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">';
         const bucketData = [
+            { label: 'Todos', key: 'todos', color: 'blue' },
             { label: 'Vencidos até 30 dias', key: '30', color: 'yellow' },
             { label: 'Vencidos de 31 a 60 dias', key: '60', color: 'orange' },
-            { label: 'Vencidos de 61 a 90 dias', key: '90', color: 'red' },
             { label: 'Vencidos há mais de 90 dias', key: '91+', color: 'red' }
         ];
+
+        // Add 'todos' bucket
+        buckets.todos = {
+            total: Object.values(buckets).reduce((sum, bucket) => sum + bucket.total, 0),
+            items: dadosComAtraso
+        };
 
         bucketData.forEach(bucketInfo => {
             const total = buckets[bucketInfo.key].total;
             const colorClass = total > 0 ? `text-${bucketInfo.color}-600` : 'text-gray-700';
             html += `
-                <div class="bg-white p-4 rounded-lg border shadow-sm">
+                <div class="atraso-card bg-white p-4 rounded-lg border shadow-sm cursor-pointer hover:border-blue-500" data-bucket="${bucketInfo.key}">
                     <h4 class="text-gray-600 text-sm font-medium">${bucketInfo.label}</h4>
                     <p class="text-3xl font-bold ${colorClass} mt-2">${formatCurrency(total)}</p>
                 </div>`;
         });
         html += '</div>';
+
+        // Add the detailed table
+        html += `
+            <div class="mt-8 overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Favorecido</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vencimento</th>
+                            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Dias em Atraso</th>
+                            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Saldo Devedor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-analise-atraso" class="bg-white divide-y divide-gray-200">
+        `;
+
+        dadosComAtraso.forEach(d => {
+            html += `
+                <tr class="atraso-item" data-dias-atraso="${d.diasAtraso}">
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${d.favorecidoNome}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${d.descricao}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${new Date(d.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-center font-semibold text-red-700">${d.diasAtraso}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">${formatCurrency(d.valorSaldo)}</td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table></div>`;
+
         return html;
     }
 
@@ -675,6 +712,38 @@ export function initializeRelatorios(db, userId, common) {
         tituloRelatorioPagarEl.textContent = `Relatório: ${pagarTipoSelect.options[pagarTipoSelect.selectedIndex].textContent}`;
         visualizacaoAreaPagar.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione os filtros e clique em "Gerar Relatório".</p>`;
         exportarRelatorioPagarBtn.disabled = true;
+    });
+
+    visualizacaoAreaPagar.addEventListener('click', (e) => {
+        const card = e.target.closest('.atraso-card');
+        if (!card) return;
+
+        const bucket = card.dataset.bucket;
+        const allRows = document.querySelectorAll('#tabela-analise-atraso .atraso-item');
+
+        allRows.forEach(row => {
+            const diasAtraso = parseInt(row.dataset.diasAtraso, 10);
+            let show = false;
+            switch (bucket) {
+                case 'todos':
+                    show = true;
+                    break;
+                case '30':
+                    show = diasAtraso <= 30;
+                    break;
+                case '60':
+                    show = diasAtraso > 30 && diasAtraso <= 60;
+                    break;
+                case '91+':
+                    show = diasAtraso > 60; // Adjusted logic to match the bucket label
+                    break;
+            }
+            row.style.display = show ? '' : 'none';
+        });
+
+        // Highlight the active card
+        document.querySelectorAll('.atraso-card').forEach(c => c.classList.remove('border-blue-500', 'ring-2', 'ring-blue-300'));
+        card.classList.add('border-blue-500', 'ring-2', 'ring-blue-300');
     });
 
 
