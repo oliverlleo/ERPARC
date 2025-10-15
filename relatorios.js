@@ -927,7 +927,7 @@ export function initializeRelatorios(db, userId, common) {
                     <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700" style="padding-left: ${paddingLeft + 16}px;">
                         <div class="flex items-center">
                             ${hasChildren ? `<span class="dre-toggle-icon material-symbols-outlined text-base cursor-pointer mr-2 transition-transform">chevron_right</span>` : '<span class="w-6 mr-2"></span>'}
-                            <span>${node.nome}</span>
+                            <span>${node.codigo} - ${node.nome}</span>
                         </div>
                     </td>
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-right font-mono">${formatCurrency(node.total)}</td>
