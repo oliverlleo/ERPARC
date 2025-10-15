@@ -2925,7 +2925,7 @@
                                             <option value="posicao-carteira">Posição de Carteira</option>
                                             <option value="inadimplencia">Análise de Inadimplência</option>
                                             <option value="previsao">Previsão de Recebimentos</option>
-                                            <option value="categoria">Análise por Categoria</option>
+                                            <option value="fluxo-caixa-dre">Fluxo de Caixa (DRE Gerencial)</option>
                                         </select>
                                     </div>
                                      <div class="flex-grow min-w-[150px]">
@@ -2982,7 +2982,7 @@
                                             <option value="posicao-carteira-pagar">Posição da Carteira a Pagar</option>
                                             <option value="analise-atraso">Análise de Atraso de Pagamentos</option>
                                             <option value="previsao-desembolsos">Previsão de Desembolsos</option>
-                                            <option value="analise-despesas">Análise de Despesas por Categoria</option>
+                                            <option value="fluxo-caixa-dre">Fluxo de Caixa (DRE Gerencial)</option>
                                         </select>
                                     </div>
                                     <!-- Período -->
@@ -6663,7 +6663,7 @@
 
             let statusText = data.status || 'Pendente';
             const vencimento = new Date(data.vencimento + 'T00:00:00');
-            if ((statusText === 'Pendente' || statusText === 'Pago Parcialmente') && vencimento < today) {
+            if (statusText === 'Pendente' && vencimento < today) {
                 statusText = 'Vencido';
             }
 
@@ -8942,7 +8942,7 @@ function validateParcelasSum() {
             const vencimentoField = data.dataVencimento || data.vencimento;
             const vencimento = new Date(vencimentoField + 'T00:00:00');
 
-            if ((statusText === 'Pendente' || statusText === 'Recebido Parcialmente') && vencimento < today) {
+            if (statusText === 'Pendente' && vencimento < today) {
                 statusText = 'Vencido';
             }
 

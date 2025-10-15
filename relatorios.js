@@ -82,7 +82,7 @@ export function initializeRelatorios(db, userId, common) {
 
     // --- Funções de Lógica de Relatório (Contas a Receber) ---
 
-    function processarRelatorioReceber(tipo, filtros) {
+    async function processarRelatorioReceber(tipo, filtros) {
         let dadosParaRenderizar;
 
         switch (tipo) {
@@ -100,9 +100,13 @@ export function initializeRelatorios(db, userId, common) {
                 dadosParaRenderizar = relatorioDadosBase.filter(d => d.status === 'Pendente' || d.status === 'Recebido Parcialmente');
                 visualizacaoAreaReceber.innerHTML = renderPrevisaoRecebimentos(dadosParaRenderizar);
                 break;
-            case 'categoria':
-                dadosParaRenderizar = relatorioDadosBase;
-                visualizacaoAreaReceber.innerHTML = renderAnaliseCategoria(dadosParaRenderizar);
+            case 'fluxo-caixa-dre':
+                const planosDeContasQuery = query(collection(db, `users/${userId}/planosDeContas`));
+                const planosDeContasSnap = await getDocs(planosDeContasQuery);
+                const planosDeContas = planosDeContasSnap.docs.map(doc => doc.data());
+                const tree = buildCashFlowTree(planosDeContas, relatorioDadosBase);
+                visualizacaoAreaReceber.innerHTML = renderFluxoDeCaixa(tree);
+                dadosParaRenderizar = relatorioDadosBase; // for export button logic
                 break;
             default:
                 visualizacaoAreaReceber.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione um tipo de relatório e clique em "Gerar Relatório".</p>`;
@@ -257,16 +261,17 @@ export function initializeRelatorios(db, userId, common) {
 
     function renderPrevisaoRecebimentos(dados) {
         const hoje = new Date();
-        const previsoes = {}; // Ex: { '2023-10': 150000, '2023-11': 200000 }
+        const previsoes = {};
 
         dados.forEach(d => {
             const dataVencimento = new Date(d.dataVencimento + 'T00:00:00');
             if (dataVencimento >= hoje) {
                 const mesAno = `${dataVencimento.getFullYear()}-${String(dataVencimento.getMonth() + 1).padStart(2, '0')}`;
                 if (!previsoes[mesAno]) {
-                    previsoes[mesAno] = 0;
+                    previsoes[mesAno] = { total: 0, items: [] };
                 }
-                previsoes[mesAno] += d.saldoPendente || 0;
+                previsoes[mesAno].total += d.saldoPendente || 0;
+                previsoes[mesAno].items.push(d);
             }
         });
 
@@ -274,20 +279,43 @@ export function initializeRelatorios(db, userId, common) {
             return `<p class="text-center text-gray-500 py-12">Nenhum recebimento futuro encontrado.</p>`;
         }
 
-        let html = `
-            <div class="space-y-4">
-                <h3 class="text-lg font-semibold">Previsão Mensal de Recebimentos</h3>`;
-
+        let html = `<div class="space-y-2"><h3 class="text-lg font-semibold mb-4">Previsão Mensal de Recebimentos</h3>`;
         const mesesOrdenados = Object.keys(previsoes).sort();
 
         mesesOrdenados.forEach(mesAno => {
             const [ano, mes] = mesAno.split('-');
             const nomeMes = new Date(ano, mes - 1, 1).toLocaleString('pt-BR', { month: 'long' });
             html += `
-                <div class="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
-                    <span class="font-medium text-blue-800">${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} de ${ano}</span>
-                    <span class="font-bold text-xl text-blue-900">${formatCurrency(previsoes[mesAno])}</span>
-                </div>`;
+                <div class="border rounded-lg overflow-hidden">
+                    <div class="flex justify-between items-center p-4 bg-blue-50 cursor-pointer hover:bg-blue-100 transition-colors previsao-accordion-header" data-target="previsao-receber-${mesAno}">
+                        <span class="font-medium text-blue-800">${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} de ${ano}</span>
+                        <div class="flex items-center">
+                            <span class="font-bold text-xl text-blue-900 mr-4">${formatCurrency(previsoes[mesAno].total)}</span>
+                            <span class="material-symbols-outlined text-blue-700 transition-transform transform">expand_more</span>
+                        </div>
+                    </div>
+                    <div id="previsao-receber-${mesAno}" class="hidden p-4">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Cliente</th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Descrição</th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Vencimento</th>
+                                    <th class="px-3 py-2 text-right font-medium text-gray-600">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+            previsoes[mesAno].items.forEach(item => {
+                html += `
+                    <tr class="border-b">
+                        <td class="px-3 py-2">${item.clienteNome}</td>
+                        <td class="px-3 py-2">${item.descricao}</td>
+                        <td class="px-3 py-2">${new Date(item.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                        <td class="px-3 py-2 text-right">${formatCurrency(item.saldoPendente)}</td>
+                    </tr>
+                `;
+            });
+            html += `</tbody></table></div></div>`;
         });
 
         html += `</div>`;
@@ -339,7 +367,7 @@ export function initializeRelatorios(db, userId, common) {
     }
 
     // --- Funções de Lógica de Relatório (Contas a Pagar) ---
-    function processarRelatorioPagar(tipo, filtros) {
+    async function processarRelatorioPagar(tipo, filtros) {
         let dadosParaRenderizar;
 
         // Client-side filtering
@@ -362,9 +390,13 @@ export function initializeRelatorios(db, userId, common) {
                 dadosParaRenderizar = dadosFiltrados.filter(d => d.status === 'Pendente' || d.status === 'Pago Parcialmente');
                 visualizacaoAreaPagar.innerHTML = renderPrevisaoDesembolsos(dadosParaRenderizar);
                 break;
-            case 'analise-despesas':
-                 dadosParaRenderizar = dadosFiltrados;
-                 visualizacaoAreaPagar.innerHTML = renderAnaliseDespesas(dadosParaRenderizar);
+            case 'fluxo-caixa-dre':
+                const planosDeContasQuery = query(collection(db, `users/${userId}/planosDeContas`));
+                const planosDeContasSnap = await getDocs(planosDeContasQuery);
+                const planosDeContas = planosDeContasSnap.docs.map(doc => doc.data());
+                const tree = buildCashFlowTree(planosDeContas, dadosFiltrados);
+                visualizacaoAreaPagar.innerHTML = renderFluxoDeCaixa(tree);
+                dadosParaRenderizar = dadosFiltrados;
                 break;
             default:
                 visualizacaoAreaPagar.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione um tipo de relatório e clique em "Gerar Relatório".</p>`;
@@ -458,56 +490,118 @@ export function initializeRelatorios(db, userId, common) {
 
         let html = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">';
         const bucketData = [
+            { label: 'Todos', key: 'todos', color: 'blue' },
             { label: 'Vencidos até 30 dias', key: '30', color: 'yellow' },
             { label: 'Vencidos de 31 a 60 dias', key: '60', color: 'orange' },
-            { label: 'Vencidos de 61 a 90 dias', key: '90', color: 'red' },
             { label: 'Vencidos há mais de 90 dias', key: '91+', color: 'red' }
         ];
+
+        // Add 'todos' bucket
+        buckets.todos = {
+            total: Object.values(buckets).reduce((sum, bucket) => sum + bucket.total, 0),
+            items: dadosComAtraso
+        };
 
         bucketData.forEach(bucketInfo => {
             const total = buckets[bucketInfo.key].total;
             const colorClass = total > 0 ? `text-${bucketInfo.color}-600` : 'text-gray-700';
             html += `
-                <div class="bg-white p-4 rounded-lg border shadow-sm">
+                <div class="atraso-card bg-white p-4 rounded-lg border shadow-sm cursor-pointer hover:border-blue-500" data-bucket="${bucketInfo.key}">
                     <h4 class="text-gray-600 text-sm font-medium">${bucketInfo.label}</h4>
                     <p class="text-3xl font-bold ${colorClass} mt-2">${formatCurrency(total)}</p>
                 </div>`;
         });
         html += '</div>';
+
+        // Add the detailed table
+        html += `
+            <div class="mt-8 overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Favorecido</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vencimento</th>
+                            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Dias em Atraso</th>
+                            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Saldo Devedor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-analise-atraso" class="bg-white divide-y divide-gray-200">
+        `;
+
+        dadosComAtraso.forEach(d => {
+            html += `
+                <tr class="atraso-item" data-dias-atraso="${d.diasAtraso}">
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${d.favorecidoNome}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${d.descricao}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${new Date(d.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-center font-semibold text-red-700">${d.diasAtraso}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">${formatCurrency(d.valorSaldo)}</td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table></div>`;
+
         return html;
     }
 
     function renderPrevisaoDesembolsos(dados) {
-        const hoje = new Date();
         const previsoes = {};
 
         dados.forEach(d => {
             const dataVencimento = new Date(d.vencimento + 'T00:00:00');
-            if (dataVencimento >= hoje) {
-                const mesAno = `${dataVencimento.getFullYear()}-${String(dataVencimento.getMonth() + 1).padStart(2, '0')}`;
-                if (!previsoes[mesAno]) {
-                    previsoes[mesAno] = 0;
-                }
-                previsoes[mesAno] += d.valorSaldo || 0;
+            const mesAno = `${dataVencimento.getFullYear()}-${String(dataVencimento.getMonth() + 1).padStart(2, '0')}`;
+            if (!previsoes[mesAno]) {
+                previsoes[mesAno] = { total: 0, items: [] };
             }
+            previsoes[mesAno].total += d.valorSaldo || 0;
+            previsoes[mesAno].items.push(d);
         });
 
         if (Object.keys(previsoes).length === 0) {
             return `<p class="text-center text-gray-500 py-12">Nenhum desembolso futuro encontrado.</p>`;
         }
 
-        let html = `<div class="space-y-4"><h3 class="text-lg font-semibold">Previsão Mensal de Desembolsos</h3>`;
+        let html = `<div class="space-y-2"><h3 class="text-lg font-semibold mb-4">Previsão Mensal de Desembolsos</h3>`;
         const mesesOrdenados = Object.keys(previsoes).sort();
 
         mesesOrdenados.forEach(mesAno => {
             const [ano, mes] = mesAno.split('-');
             const nomeMes = new Date(ano, mes - 1, 1).toLocaleString('pt-BR', { month: 'long' });
             html += `
-                <div class="flex justify-between items-center p-4 bg-red-50 rounded-lg">
-                    <span class="font-medium text-red-800">${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} de ${ano}</span>
-                    <span class="font-bold text-xl text-red-900">${formatCurrency(previsoes[mesAno])}</span>
-                </div>`;
+                <div class="border rounded-lg overflow-hidden">
+                    <div class="flex justify-between items-center p-4 bg-red-50 cursor-pointer hover:bg-red-100 transition-colors previsao-accordion-header" data-target="previsao-pagar-${mesAno}">
+                        <span class="font-medium text-red-800">${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} de ${ano}</span>
+                        <div class="flex items-center">
+                            <span class="font-bold text-xl text-red-900 mr-4">${formatCurrency(previsoes[mesAno].total)}</span>
+                             <span class="material-symbols-outlined text-red-700 transition-transform transform">expand_more</span>
+                        </div>
+                    </div>
+                    <div id="previsao-pagar-${mesAno}" class="hidden p-4">
+                        <table class="min-w-full text-sm">
+                             <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Favorecido</th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Descrição</th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Vencimento</th>
+                                    <th class="px-3 py-2 text-right font-medium text-gray-600">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+            previsoes[mesAno].items.forEach(item => {
+                html += `
+                    <tr class="border-b">
+                        <td class="px-3 py-2">${item.favorecidoNome}</td>
+                        <td class="px-3 py-2">${item.descricao}</td>
+                        <td class="px-3 py-2">${new Date(item.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                        <td class="px-3 py-2 text-right">${formatCurrency(item.valorSaldo)}</td>
+                    </tr>
+                `;
+            });
+            html += `</tbody></table></div></div>`;
         });
+
         html += `</div>`;
         return html;
     }
@@ -575,15 +669,19 @@ export function initializeRelatorios(db, userId, common) {
             let q = collection(db, `users/${userId}/despesas`);
             let queryConstraints = [];
 
-            if (filtros.periodoDe) queryConstraints.push(where("vencimento", ">=", filtros.periodoDe));
-            if (filtros.periodoAte) queryConstraints.push(where("vencimento", "<=", filtros.periodoAte));
+            // A previsão não deve ser limitada pelo período selecionado, mas sim por tudo que está em aberto para o futuro.
+            if (filtros.tipo !== 'previsao-desembolsos') {
+                if (filtros.periodoDe) queryConstraints.push(where("vencimento", ">=", filtros.periodoDe));
+                if (filtros.periodoAte) queryConstraints.push(where("vencimento", "<=", filtros.periodoAte));
+            }
+
             queryConstraints.push(orderBy("vencimento", "asc"));
 
             q = query(q, ...queryConstraints);
             const snapshot = await getDocs(q);
 
             relatorioDadosPagarBase = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            processarRelatorioPagar(filtros.tipo, filtros);
+            await processarRelatorioPagar(filtros.tipo, filtros);
 
         } catch (error) {
             console.error("Erro ao gerar relatório de Contas a Pagar:", error);
@@ -625,7 +723,7 @@ export function initializeRelatorios(db, userId, common) {
                 .map(doc => ({ id: doc.id, ...doc.data() }))
                 .filter(d => d.status !== 'Desdobrado'); // Sempre excluir desdobrados da visão principal
 
-            processarRelatorioReceber(filtros.tipo, filtros);
+            await processarRelatorioReceber(filtros.tipo, filtros);
 
         } catch (error) {
             console.error("Erro ao gerar relatório:", error);
@@ -648,10 +746,10 @@ export function initializeRelatorios(db, userId, common) {
         }
     }
 
-    receberTipoSelect.addEventListener('change', () => {
+    receberTipoSelect.addEventListener('change', async () => {
         toggleReportFilters(receberTipoSelect, receberStatusSelect);
         if (relatorioDadosBase.length > 0) {
-            processarRelatorioReceber(receberTipoSelect.value, {
+            await processarRelatorioReceber(receberTipoSelect.value, {
                 periodoDe: receberPeriodoDeInput.value,
                 periodoAte: receberPeriodoAteInput.value,
                 clienteId: receberClienteSelect.value,
@@ -671,6 +769,65 @@ export function initializeRelatorios(db, userId, common) {
         tituloRelatorioPagarEl.textContent = `Relatório: ${pagarTipoSelect.options[pagarTipoSelect.selectedIndex].textContent}`;
         visualizacaoAreaPagar.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione os filtros e clique em "Gerar Relatório".</p>`;
         exportarRelatorioPagarBtn.disabled = true;
+    });
+
+    function handleAccordionClick(e) {
+        const header = e.target.closest('.previsao-accordion-header');
+        if (header) {
+            const targetId = header.dataset.target;
+            const content = document.getElementById(targetId);
+            const icon = header.querySelector('.material-symbols-outlined');
+
+            if (content) {
+                content.classList.toggle('hidden');
+                icon.classList.toggle('rotate-180');
+            }
+            return;
+        }
+
+        const dreRow = e.target.closest('.dre-row');
+        if (dreRow) {
+            const rowId = dreRow.dataset.id;
+            const icon = dreRow.querySelector('.dre-toggle-icon');
+            document.querySelectorAll(`.dre-row[data-parent-id="${rowId}"]`).forEach(childRow => {
+                childRow.style.display = childRow.style.display === 'none' ? '' : 'none';
+            });
+            if(icon) icon.classList.toggle('rotate-90');
+        }
+    }
+
+    visualizacaoAreaReceber.addEventListener('click', handleAccordionClick);
+    visualizacaoAreaPagar.addEventListener('click', (e) => {
+        handleAccordionClick(e); // Handle both accordion types
+        const card = e.target.closest('.atraso-card');
+        if (!card) return;
+
+        const bucket = card.dataset.bucket;
+        const allRows = document.querySelectorAll('#tabela-analise-atraso .atraso-item');
+
+        allRows.forEach(row => {
+            const diasAtraso = parseInt(row.dataset.diasAtraso, 10);
+            let show = false;
+            switch (bucket) {
+                case 'todos':
+                    show = true;
+                    break;
+                case '30':
+                    show = diasAtraso <= 30;
+                    break;
+                case '60':
+                    show = diasAtraso > 30 && diasAtraso <= 60;
+                    break;
+                case '91+':
+                    show = diasAtraso > 60; // Adjusted logic to match the bucket label
+                    break;
+            }
+            row.style.display = show ? '' : 'none';
+        });
+
+        // Highlight the active card
+        document.querySelectorAll('.atraso-card').forEach(c => c.classList.remove('border-blue-500', 'ring-2', 'ring-blue-300'));
+        card.classList.add('border-blue-500', 'ring-2', 'ring-blue-300');
     });
 
 
@@ -700,4 +857,91 @@ export function initializeRelatorios(db, userId, common) {
     populateBeneficiariosDropdown();
     toggleReportFilters(receberTipoSelect, receberStatusSelect);
     toggleReportFilters(pagarTipoSelect, pagarStatusSelect);
+
+    function buildCashFlowTree(planosDeContas, lancamentos) {
+        const tree = {};
+
+        // Initialize tree with all accounts from planoDeContas
+        planosDeContas.forEach(conta => {
+            tree[conta.codigo] = {
+                ...conta,
+                children: [],
+                total: 0,
+                items: []
+            };
+        });
+
+        // Populate items and calculate totals for each account
+        lancamentos.forEach(lancamento => {
+            const codigo = lancamento.codigoPlanoDeContas;
+            if (tree[codigo]) {
+                const valor = lancamento.valorOriginal || lancamento.valor || 0;
+                tree[codigo].items.push(lancamento);
+                tree[codigo].total += valor;
+            }
+        });
+
+        // Roll up totals from children to parents
+        const sortedCodigos = Object.keys(tree).sort((a, b) => b.length - a.length);
+        sortedCodigos.forEach(codigo => {
+            const node = tree[codigo];
+            if (node.codigoPai && tree[node.codigoPai]) {
+                tree[node.codigoPai].total += node.total;
+            }
+        });
+
+        // Build the final hierarchical structure
+        const roots = [];
+        Object.values(tree).forEach(node => {
+            if (node.codigoPai && tree[node.codigoPai]) {
+                tree[node.codigoPai].children.push(node);
+            } else if (!node.codigoPai) {
+                roots.push(node);
+            }
+        });
+
+        return roots;
+    }
+
+    function renderFluxoDeCaixa(tree) {
+        let html = `
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Conta</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Valor Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+        function renderNode(node, level, isVisible) {
+            const hasChildren = node.children && node.children.length > 0;
+            const isSintetica = !node.aceitaLancamento;
+            const rowClass = isSintetica ? 'font-bold bg-gray-50' : '';
+            const paddingLeft = level * 24;
+            const displayStyle = isVisible ? '' : 'display: none;';
+
+            html += `
+                <tr class="dre-row ${rowClass}" data-id="${node.codigo}" data-parent-id="${node.codigoPai || ''}" style="${displayStyle}">
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700" style="padding-left: ${paddingLeft + 16}px;">
+                        <div class="flex items-center">
+                            ${hasChildren ? `<span class="dre-toggle-icon material-symbols-outlined text-base cursor-pointer mr-2 transition-transform">chevron_right</span>` : '<span class="w-6 mr-2"></span>'}
+                            <span>${node.codigo} - ${node.nome}</span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-right font-mono">${formatCurrency(node.total)}</td>
+                </tr>
+            `;
+
+            if (hasChildren) {
+                node.children.forEach(child => renderNode(child, level + 1, false)); // Children start hidden
+            }
+        }
+
+        tree.forEach(rootNode => renderNode(rootNode, 0, true)); // Root nodes start visible
+
+        html += `</tbody></table></div>`;
+        return html;
+    }
 }
