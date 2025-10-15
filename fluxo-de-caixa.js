@@ -624,40 +624,15 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     // --- Data Processing Functions ---
     function processWhatIfEvolucaoSaldoData(transactions, saldoAnterior) {
         const includeProjections = whatIfIncludeProjectionsCheckbox.checked;
-
-        // Create a unified list of all transactions that should be considered.
-        const allRelevantTransactions = transactions.filter(t => {
-            if (t.isSimulated || t.isComparison) return true; // Always include simulation/comparison
-            if (visaoRealizadoCheckbox.checked && !t.isProjected) return true; // Include realized if checked
-            if (visaoProjetadoCheckbox.checked && t.isProjected) return true; // Include projected if checked
-            return false;
-        });
-
-        // Sort all transactions chronologically.
-        allRelevantTransactions.sort((a, b) => new Date(a.data) - new Date(b.data));
-
-        const labels = [];
-        const realizadoData = [];
-        const projetadoData = [];
-        const simuladoData = [];
-        const comparadoData = [];
-
-        let saldoRealizado = saldoAnterior;
-        let saldoProjetadoBase = saldoAnterior;
-        let saldoSimulado = saldoAnterior;
-        let saldoComparado = saldoAnterior;
-
-        let lastRealizedBalance = saldoAnterior;
-
         const dailyChanges = {};
 
-        // Aggregate changes per day to avoid multiple points on the same day in the chart
-        allRelevantTransactions.forEach(t => {
+        // Aggregate all changes by day and type
+        transactions.forEach(t => {
             const day = t.data;
             if (!dailyChanges[day]) {
                 dailyChanges[day] = { realizado: 0, projetado: 0, simulado: 0, comparado: 0 };
             }
-            const netChange = t.entrada - t.saida;
+            const netChange = (t.entrada || 0) - (t.saida || 0);
 
             if (t.isComparison) {
                 dailyChanges[day].comparado += netChange;
@@ -671,44 +646,39 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         });
 
         const sortedDays = Object.keys(dailyChanges).sort();
+        const labels = [];
+        const realizadoData = [];
+        const projetadoData = [];
+        const simuladoData = [];
+        const comparadoData = [];
+
+        let runningSaldoRealizado = saldoAnterior;
+        let runningSaldoProjetado = saldoAnterior;
 
         sortedDays.forEach(day => {
             labels.push(new Date(day + 'T00:00:00').toLocaleDateString('pt-BR'));
             const changes = dailyChanges[day];
 
-            // Update running balances
-            saldoRealizado += changes.realizado;
-            saldoProjetadoBase = saldoRealizado + changes.projetado;
+            // Update the cumulative balances correctly
+            runningSaldoRealizado += changes.realizado;
+            runningSaldoProjetado += changes.realizado + changes.projetado;
+
+            let saldoSimuladoDoDia;
+            let saldoComparadoDoDia;
 
             if (includeProjections) {
-                saldoSimulado = saldoProjetadoBase + changes.simulado;
-                saldoComparado = saldoProjetadoBase + changes.comparado;
+                saldoSimuladoDoDia = runningSaldoProjetado + changes.simulado;
+                saldoComparadoDoDia = runningSaldoProjetado + changes.comparado;
             } else {
-                saldoSimulado = saldoRealizado + changes.simulado;
-                saldoComparado = saldoRealizado + changes.comparado;
+                saldoSimuladoDoDia = runningSaldoRealizado + changes.simulado;
+                saldoComparadoDoDia = runningSaldoRealizado + changes.comparado;
             }
 
-            // Store the data for the chart
-            realizadoData.push(saldoRealizado / 100);
-            projetadoData.push(saldoProjetadoBase / 100);
-            simuladoData.push(saldoSimulado / 100);
-            comparadoData.push(saldoComparado / 100);
-
-            // Keep track of the last known "realized" balance for the flat line
-            if(changes.realizado !== 0) {
-                lastRealizedBalance = saldoRealizado;
-            }
+            realizadoData.push(runningSaldoRealizado / 100);
+            projetadoData.push(runningSaldoProjetado / 100);
+            simuladoData.push(saldoSimuladoDoDia / 100);
+            comparadoData.push(saldoComparadoDoDia / 100);
         });
-
-        // Ensure the "realizado" line stays flat after the last realized transaction
-        for (let i = 0; i < sortedDays.length; i++) {
-             if (new Date(sortedDays[i] + 'T00:00:00') > new Date()) { // A simple way to check for future dates
-                 if(i > 0 && realizadoData[i] !== realizadoData[i-1]){
-                    // This logic might need refinement based on exact requirements,
-                    // but the core idea is to not project realized balance forward.
-                 }
-             }
-        }
 
         return { labels, realizadoData, projetadoData, simuladoData, comparadoData };
     }
