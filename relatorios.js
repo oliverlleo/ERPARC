@@ -575,8 +575,12 @@ export function initializeRelatorios(db, userId, common) {
             let q = collection(db, `users/${userId}/despesas`);
             let queryConstraints = [];
 
-            if (filtros.periodoDe) queryConstraints.push(where("vencimento", ">=", filtros.periodoDe));
-            if (filtros.periodoAte) queryConstraints.push(where("vencimento", "<=", filtros.periodoAte));
+            // A previsão não deve ser limitada pelo período selecionado, mas sim por tudo que está em aberto para o futuro.
+            if (filtros.tipo !== 'previsao-desembolsos') {
+                if (filtros.periodoDe) queryConstraints.push(where("vencimento", ">=", filtros.periodoDe));
+                if (filtros.periodoAte) queryConstraints.push(where("vencimento", "<=", filtros.periodoAte));
+            }
+
             queryConstraints.push(orderBy("vencimento", "asc"));
 
             q = query(q, ...queryConstraints);

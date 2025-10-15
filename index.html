@@ -6663,7 +6663,7 @@
 
             let statusText = data.status || 'Pendente';
             const vencimento = new Date(data.vencimento + 'T00:00:00');
-            if ((statusText === 'Pendente' || statusText === 'Pago Parcialmente') && vencimento < today) {
+            if (statusText === 'Pendente' && vencimento < today) {
                 statusText = 'Vencido';
             }
 
@@ -8942,7 +8942,7 @@ function validateParcelasSum() {
             const vencimentoField = data.dataVencimento || data.vencimento;
             const vencimento = new Date(vencimentoField + 'T00:00:00');
 
-            if ((statusText === 'Pendente' || statusText === 'Recebido Parcialmente') && vencimento < today) {
+            if (statusText === 'Pendente' && vencimento < today) {
                 statusText = 'Vencido';
             }
 
