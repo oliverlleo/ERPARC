@@ -606,9 +606,17 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         // 7. What-If Chart
         const whatIfData = processWhatIfEvolucaoSaldoData(transactions, saldoAnterior);
         renderWhatIfEvolucaoSaldoChart(whatIfData);
-        whatIfSaldoInicialEl.textContent = formatCurrency(saldoAnterior);
-        whatIfSaldoProjetadoEl.textContent = formatCurrency(whatIfData.projetadoData.length > 0 ? whatIfData.projetadoData[whatIfData.projetadoData.length - 1] * 100 : saldoAnterior);
-        whatIfSaldoSimuladoEl.textContent = formatCurrency(whatIfData.simuladoData.length > 0 ? whatIfData.simuladoData[whatIfData.simuladoData.length - 1] * 100 : saldoAnterior);
+
+        const showProjetado = visaoProjetadoCheckbox.checked;
+        const showRealizado = visaoRealizadoCheckbox.checked;
+
+        whatIfSaldoInicialEl.textContent = showRealizado ? formatCurrency(saldoAnterior) : 'N/A';
+        whatIfSaldoProjetadoEl.textContent = showProjetado ? formatCurrency(whatIfData.projetadoData.length > 0 ? whatIfData.projetadoData[whatIfData.projetadoData.length - 1] * 100 : saldoAnterior) : 'N/A';
+        whatIfSaldoSimuladoEl.textContent = whatIfScenario.length > 0 ? formatCurrency(whatIfData.simuladoData.length > 0 ? whatIfData.simuladoData[whatIfData.simuladoData.length - 1] * 100 : saldoAnterior) : 'N/A';
+
+        whatIfSaldoProjetadoEl.parentElement.classList.toggle('hidden', !showProjetado);
+        whatIfSaldoSimuladoEl.parentElement.classList.toggle('hidden', whatIfScenario.length === 0);
+
         whatIfSaldoComparadoEl.textContent = formatCurrency(whatIfData.comparadoData.length > 0 ? whatIfData.comparadoData[whatIfData.comparadoData.length - 1] * 100 : 0);
         whatIfSaldoComparadoEl.parentElement.classList.toggle('hidden', !comparisonScenario);
     }
@@ -892,16 +900,24 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             chartInstances.whatIfEvolucaoSaldo.destroy();
         }
 
-        const datasets = [
-            {
+        const showRealizado = visaoRealizadoCheckbox.checked;
+        const showProjetado = visaoProjetadoCheckbox.checked;
+
+        const datasets = [];
+
+        if (showRealizado) {
+            datasets.push({
                 label: 'Saldo Realizado',
                 data: realizadoData,
                 borderColor: 'rgba(54, 162, 235, 1)',
                 backgroundColor: 'rgba(54, 162, 235, 0.2)',
                 fill: false,
                 tension: 0.1
-            },
-            {
+            });
+        }
+
+        if (showProjetado) {
+            datasets.push({
                 label: 'Projeção Base',
                 data: projetadoData,
                 borderColor: 'rgba(255, 159, 64, 1)',
@@ -909,8 +925,11 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 backgroundColor: 'rgba(255, 159, 64, 0.2)',
                 fill: false,
                 tension: 0.1
-            },
-            {
+            });
+        }
+
+        if (whatIfScenario.length > 0) {
+            datasets.push({
                 label: 'Projeção Simulada',
                 data: simuladoData,
                 borderColor: 'rgba(75, 192, 192, 1)',
@@ -918,8 +937,8 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 backgroundColor: 'rgba(75, 192, 192, 0.2)',
                 fill: false,
                 tension: 0.1
-            }
-        ];
+            });
+        }
 
         if (comparisonScenario) {
             datasets.push({
@@ -931,6 +950,10 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 fill: false,
                 tension: 0.1
             });
+        }
+
+        if (datasets.length === 0) {
+            return;
         }
 
         chartInstances.whatIfEvolucaoSaldo = new Chart(ctx, {
