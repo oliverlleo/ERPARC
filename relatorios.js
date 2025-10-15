@@ -82,7 +82,7 @@ export function initializeRelatorios(db, userId, common) {
 
     // --- Funções de Lógica de Relatório (Contas a Receber) ---
 
-    function processarRelatorioReceber(tipo, filtros) {
+    async function processarRelatorioReceber(tipo, filtros) {
         let dadosParaRenderizar;
 
         switch (tipo) {
@@ -367,7 +367,7 @@ export function initializeRelatorios(db, userId, common) {
     }
 
     // --- Funções de Lógica de Relatório (Contas a Pagar) ---
-    function processarRelatorioPagar(tipo, filtros) {
+    async function processarRelatorioPagar(tipo, filtros) {
         let dadosParaRenderizar;
 
         // Client-side filtering
@@ -681,7 +681,7 @@ export function initializeRelatorios(db, userId, common) {
             const snapshot = await getDocs(q);
 
             relatorioDadosPagarBase = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            processarRelatorioPagar(filtros.tipo, filtros);
+            await processarRelatorioPagar(filtros.tipo, filtros);
 
         } catch (error) {
             console.error("Erro ao gerar relatório de Contas a Pagar:", error);
@@ -723,7 +723,7 @@ export function initializeRelatorios(db, userId, common) {
                 .map(doc => ({ id: doc.id, ...doc.data() }))
                 .filter(d => d.status !== 'Desdobrado'); // Sempre excluir desdobrados da visão principal
 
-            processarRelatorioReceber(filtros.tipo, filtros);
+            await processarRelatorioReceber(filtros.tipo, filtros);
 
         } catch (error) {
             console.error("Erro ao gerar relatório:", error);
@@ -746,10 +746,10 @@ export function initializeRelatorios(db, userId, common) {
         }
     }
 
-    receberTipoSelect.addEventListener('change', () => {
+    receberTipoSelect.addEventListener('change', async () => {
         toggleReportFilters(receberTipoSelect, receberStatusSelect);
         if (relatorioDadosBase.length > 0) {
-            processarRelatorioReceber(receberTipoSelect.value, {
+            await processarRelatorioReceber(receberTipoSelect.value, {
                 periodoDe: receberPeriodoDeInput.value,
                 periodoAte: receberPeriodoAteInput.value,
                 clienteId: receberClienteSelect.value,
