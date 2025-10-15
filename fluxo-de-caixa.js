@@ -928,7 +928,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             });
         }
 
-        if (whatIfScenario.length > 0) {
+        if (whatIfScenario.length > 0 && (showRealizado || showProjetado)) {
             datasets.push({
                 label: 'Projeção Simulada',
                 data: simuladoData,
@@ -940,7 +940,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             });
         }
 
-        if (comparisonScenario) {
+        if (comparisonScenario && (showRealizado || showProjetado)) {
             datasets.push({
                 label: 'Projeção Comparada',
                 data: comparadoData,
@@ -953,6 +953,8 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         }
 
         if (datasets.length === 0) {
+             // If no datasets, clear the canvas
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
             return;
         }
 
