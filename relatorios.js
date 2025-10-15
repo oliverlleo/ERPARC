@@ -100,9 +100,13 @@ export function initializeRelatorios(db, userId, common) {
                 dadosParaRenderizar = relatorioDadosBase.filter(d => d.status === 'Pendente' || d.status === 'Recebido Parcialmente');
                 visualizacaoAreaReceber.innerHTML = renderPrevisaoRecebimentos(dadosParaRenderizar);
                 break;
-            case 'categoria':
-                dadosParaRenderizar = relatorioDadosBase;
-                visualizacaoAreaReceber.innerHTML = renderAnaliseCategoria(dadosParaRenderizar);
+            case 'fluxo-caixa-dre':
+                const planosDeContasQuery = query(collection(db, `users/${userId}/planosDeContas`));
+                const planosDeContasSnap = await getDocs(planosDeContasQuery);
+                const planosDeContas = planosDeContasSnap.docs.map(doc => doc.data());
+                const tree = buildCashFlowTree(planosDeContas, relatorioDadosBase);
+                visualizacaoAreaReceber.innerHTML = renderFluxoDeCaixa(tree);
+                dadosParaRenderizar = relatorioDadosBase; // for export button logic
                 break;
             default:
                 visualizacaoAreaReceber.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione um tipo de relatório e clique em "Gerar Relatório".</p>`;
@@ -386,9 +390,13 @@ export function initializeRelatorios(db, userId, common) {
                 dadosParaRenderizar = dadosFiltrados.filter(d => d.status === 'Pendente' || d.status === 'Pago Parcialmente');
                 visualizacaoAreaPagar.innerHTML = renderPrevisaoDesembolsos(dadosParaRenderizar);
                 break;
-            case 'analise-despesas':
-                 dadosParaRenderizar = dadosFiltrados;
-                 visualizacaoAreaPagar.innerHTML = renderAnaliseDespesas(dadosParaRenderizar);
+            case 'fluxo-caixa-dre':
+                const planosDeContasQuery = query(collection(db, `users/${userId}/planosDeContas`));
+                const planosDeContasSnap = await getDocs(planosDeContasQuery);
+                const planosDeContas = planosDeContasSnap.docs.map(doc => doc.data());
+                const tree = buildCashFlowTree(planosDeContas, dadosFiltrados);
+                visualizacaoAreaPagar.innerHTML = renderFluxoDeCaixa(tree);
+                dadosParaRenderizar = dadosFiltrados;
                 break;
             default:
                 visualizacaoAreaPagar.innerHTML = `<p class="text-center text-gray-500 py-12">Selecione um tipo de relatório e clique em "Gerar Relatório".</p>`;
@@ -765,21 +773,32 @@ export function initializeRelatorios(db, userId, common) {
 
     function handleAccordionClick(e) {
         const header = e.target.closest('.previsao-accordion-header');
-        if (!header) return;
+        if (header) {
+            const targetId = header.dataset.target;
+            const content = document.getElementById(targetId);
+            const icon = header.querySelector('.material-symbols-outlined');
 
-        const targetId = header.dataset.target;
-        const content = document.getElementById(targetId);
-        const icon = header.querySelector('.material-symbols-outlined');
+            if (content) {
+                content.classList.toggle('hidden');
+                icon.classList.toggle('rotate-180');
+            }
+            return;
+        }
 
-        if (content) {
-            content.classList.toggle('hidden');
-            icon.classList.toggle('rotate-180');
+        const dreRow = e.target.closest('.dre-row');
+        if (dreRow) {
+            const rowId = dreRow.dataset.id;
+            const icon = dreRow.querySelector('.dre-toggle-icon');
+            document.querySelectorAll(`.dre-row[data-parent-id="${rowId}"]`).forEach(childRow => {
+                childRow.style.display = childRow.style.display === 'none' ? '' : 'none';
+            });
+            if(icon) icon.classList.toggle('rotate-90');
         }
     }
 
     visualizacaoAreaReceber.addEventListener('click', handleAccordionClick);
     visualizacaoAreaPagar.addEventListener('click', (e) => {
-        handleAccordionClick(e); // Handle accordion for forecasts
+        handleAccordionClick(e); // Handle both accordion types
         const card = e.target.closest('.atraso-card');
         if (!card) return;
 
@@ -838,4 +857,91 @@ export function initializeRelatorios(db, userId, common) {
     populateBeneficiariosDropdown();
     toggleReportFilters(receberTipoSelect, receberStatusSelect);
     toggleReportFilters(pagarTipoSelect, pagarStatusSelect);
+
+    function buildCashFlowTree(planosDeContas, lancamentos) {
+        const tree = {};
+
+        // Initialize tree with all accounts from planoDeContas
+        planosDeContas.forEach(conta => {
+            tree[conta.codigo] = {
+                ...conta,
+                children: [],
+                total: 0,
+                items: []
+            };
+        });
+
+        // Populate items and calculate totals for each account
+        lancamentos.forEach(lancamento => {
+            const codigo = lancamento.codigoPlanoDeContas;
+            if (tree[codigo]) {
+                const valor = lancamento.valorOriginal || lancamento.valor || 0;
+                tree[codigo].items.push(lancamento);
+                tree[codigo].total += valor;
+            }
+        });
+
+        // Roll up totals from children to parents
+        const sortedCodigos = Object.keys(tree).sort((a, b) => b.length - a.length);
+        sortedCodigos.forEach(codigo => {
+            const node = tree[codigo];
+            if (node.codigoPai && tree[node.codigoPai]) {
+                tree[node.codigoPai].total += node.total;
+            }
+        });
+
+        // Build the final hierarchical structure
+        const roots = [];
+        Object.values(tree).forEach(node => {
+            if (node.codigoPai && tree[node.codigoPai]) {
+                tree[node.codigoPai].children.push(node);
+            } else if (!node.codigoPai) {
+                roots.push(node);
+            }
+        });
+
+        return roots;
+    }
+
+    function renderFluxoDeCaixa(tree) {
+        let html = `
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Conta</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Valor Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+        function renderNode(node, level, isVisible) {
+            const hasChildren = node.children && node.children.length > 0;
+            const isSintetica = !node.aceitaLancamento;
+            const rowClass = isSintetica ? 'font-bold bg-gray-50' : '';
+            const paddingLeft = level * 24;
+            const displayStyle = isVisible ? '' : 'display: none;';
+
+            html += `
+                <tr class="dre-row ${rowClass}" data-id="${node.codigo}" data-parent-id="${node.codigoPai || ''}" style="${displayStyle}">
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700" style="padding-left: ${paddingLeft + 16}px;">
+                        <div class="flex items-center">
+                            ${hasChildren ? `<span class="dre-toggle-icon material-symbols-outlined text-base cursor-pointer mr-2 transition-transform">chevron_right</span>` : '<span class="w-6 mr-2"></span>'}
+                            <span>${node.nome}</span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-right font-mono">${formatCurrency(node.total)}</td>
+                </tr>
+            `;
+
+            if (hasChildren) {
+                node.children.forEach(child => renderNode(child, level + 1, false)); // Children start hidden
+            }
+        }
+
+        tree.forEach(rootNode => renderNode(rootNode, 0, true)); // Root nodes start visible
+
+        html += `</tbody></table></div>`;
+        return html;
+    }
 }
