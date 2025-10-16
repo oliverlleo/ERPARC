@@ -610,7 +610,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         const showProjetado = visaoProjetadoCheckbox.checked;
         const showRealizado = visaoRealizadoCheckbox.checked;
 
-        whatIfSaldoInicialEl.textContent = showRealizado ? formatCurrency(saldoAnterior) : 'N/A';
+        whatIfSaldoInicialEl.textContent = formatCurrency(saldoAnterior);
         whatIfSaldoProjetadoEl.textContent = showProjetado ? formatCurrency(whatIfData.projetadoData.length > 0 ? whatIfData.projetadoData[whatIfData.projetadoData.length - 1] * 100 : saldoAnterior) : 'N/A';
         whatIfSaldoSimuladoEl.textContent = whatIfScenario.length > 0 ? formatCurrency(whatIfData.simuladoData.length > 0 ? whatIfData.simuladoData[whatIfData.simuladoData.length - 1] * 100 : saldoAnterior) : 'N/A';
 
