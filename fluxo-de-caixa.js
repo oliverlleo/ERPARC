@@ -196,7 +196,13 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 unifiedTransactions.push(...projectedTransactions);
             }
 
-            // Add What-If scenario transactions
+            // Isolate base transactions before adding simulations
+            const baseTransactions = [...unifiedTransactions];
+
+            // Create a separate list for what-if analysis
+            let whatIfTransactions = [...unifiedTransactions];
+
+            // Add What-If scenario transactions to the separate list
             const simulatedTransactions = whatIfScenario.map(item => ({
                 ...item,
                 isProjected: true,
@@ -209,7 +215,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 entrada: item.type === 'receita' ? item.valor : 0,
                 saida: item.type === 'despesa' ? item.valor : 0,
             }));
-            unifiedTransactions.push(...simulatedTransactions);
+            whatIfTransactions.push(...simulatedTransactions);
 
             if (comparisonScenario) {
                 const comparisonTransactions = comparisonScenario.map(item => ({
@@ -224,22 +230,26 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                     entrada: item.type === 'receita' ? item.valor : 0,
                     saida: item.type === 'despesa' ? item.valor : 0,
                 }));
-                unifiedTransactions.push(...comparisonTransactions);
+                whatIfTransactions.push(...comparisonTransactions);
             }
 
-            unifiedTransactions.sort((a, b) => new Date(a.data) - new Date(b.data));
+            // Sort both lists
+            baseTransactions.sort((a, b) => new Date(a.data) - new Date(b.data));
+            whatIfTransactions.sort((a, b) => new Date(a.data) - new Date(b.data));
 
-            // 4. Apply Filters
-            unifiedTransactions = applyFilters(unifiedTransactions, contaId, activeConciliacaoFilter);
+            // 4. Apply Filters to both lists
+            const filteredBaseTransactions = applyFilters(baseTransactions, contaId, activeConciliacaoFilter);
+            const filteredWhatIfTransactions = applyFilters(whatIfTransactions, contaId, activeConciliacaoFilter);
 
-            // 5. Calculate KPIs
-            const kpis = calculateKPIs(saldoAnterior, unifiedTransactions, contaId);
+            // 5. Calculate KPIs using ONLY the base transactions
+            const kpis = calculateKPIs(saldoAnterior, filteredBaseTransactions, contaId);
 
             // 6. Render UI
             renderKPIs(kpis);
-            renderExtrato(unifiedTransactions, kpis.saldoAnterior);
-            renderDRE(unifiedTransactions);
-            renderAllNewCharts(unifiedTransactions, kpis.saldoAnterior);
+            renderExtrato(filteredBaseTransactions, kpis.saldoAnterior);
+            renderDRE(filteredBaseTransactions);
+            // Pass both lists to the charting function
+            renderAllNewCharts(filteredBaseTransactions, filteredWhatIfTransactions, kpis.saldoAnterior);
 
         } catch (error) {
             console.error("Error calculating cash flow:", error);
@@ -575,36 +585,30 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         chartInstances = {};
     }
 
-    function renderAllNewCharts(transactions, saldoAnterior) {
+    function renderAllNewCharts(baseTransactions, whatIfTransactions, saldoAnterior) {
         destroyAllCharts();
 
-        // 1. Receita vs. Despesa Mensal
-        const receitaVsDespesaData = processReceitaVsDespesaData(transactions);
+        // Charts for the main tabs (Extrato, Gerencial, Gráficos) use baseTransactions
+        const receitaVsDespesaData = processReceitaVsDespesaData(baseTransactions);
         renderReceitaVsDespesaChart(receitaVsDespesaData);
 
-        // 2. Acumulado Mensal
-        const acumuladoMensalData = processAcumuladoMensalData(transactions);
+        const acumuladoMensalData = processAcumuladoMensalData(baseTransactions);
         renderAcumuladoMensalChart(acumuladoMensalData);
 
-        // 3. Evolução do Saldo da Conta
-        const evolucaoSaldoData = processEvolucaoSaldoData(transactions, saldoAnterior);
+        const evolucaoSaldoData = processEvolucaoSaldoData(baseTransactions, saldoAnterior);
         renderEvolucaoSaldoChart(evolucaoSaldoData);
 
-        // 4. Análise de Despesas por Categoria
-        const despesasCategoriaData = processDespesasCategoriaData(transactions);
+        const despesasCategoriaData = processDespesasCategoriaData(baseTransactions);
         renderDespesasCategoriaChart(despesasCategoriaData);
 
-        // 5. Top 5 Despesas e Receitas
-        const { topReceitas, topDespesas } = processTop5Data(transactions);
+        const { topReceitas, topDespesas } = processTop5Data(baseTransactions);
         renderTop5ReceitasChart(topReceitas);
         renderTop5DespesasChart(topDespesas);
 
-        // 6. Comparativo de Períodos
-        // This will require an additional data fetch, handled inside its process function.
         processAndRenderComparativoPeriodos();
 
-        // 7. What-If Chart
-        const whatIfData = processWhatIfEvolucaoSaldoData(transactions, saldoAnterior);
+        // What-If Chart uses whatIfTransactions
+        const whatIfData = processWhatIfEvolucaoSaldoData(whatIfTransactions, saldoAnterior);
         renderWhatIfEvolucaoSaldoChart(whatIfData);
 
         const showProjetado = visaoProjetadoCheckbox.checked;
@@ -624,69 +628,70 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     // --- Data Processing Functions ---
     function processWhatIfEvolucaoSaldoData(transactions, saldoAnterior) {
         const includeProjections = whatIfIncludeProjectionsCheckbox.checked;
-        const dailyChanges = {};
+        const dailyData = {};
 
-        // Aggregate all changes by day and type
         transactions.forEach(t => {
             const day = t.data;
-            if (!day) {
-                console.warn("Transaction without a date found:", t);
-                return; // Skip this transaction
+            if (!dailyData[day]) {
+                dailyData[day] = { realizado: 0, projetado: 0, simulado: 0, comparado: 0 };
             }
-            if (!dailyChanges[day]) {
-                dailyChanges[day] = { realizado: 0, projetado: 0, simulado: 0, comparado: 0 };
-            }
-            const entrada = typeof t.entrada === 'number' ? t.entrada : 0;
-            const saida = typeof t.saida === 'number' ? t.saida : 0;
-            const netChange = entrada - saida;
 
             if (t.isComparison) {
-                dailyChanges[day].comparado += netChange;
+                dailyData[day].comparado += (t.entrada - t.saida);
             } else if (t.isSimulated) {
-                dailyChanges[day].simulado += netChange;
+                dailyData[day].simulado += (t.entrada - t.saida);
             } else if (t.isProjected) {
-                dailyChanges[day].projetado += netChange;
+                dailyData[day].projetado += (t.entrada - t.saida);
             } else {
-                dailyChanges[day].realizado += netChange;
+                dailyData[day].realizado += (t.entrada - t.saida);
             }
         });
 
-        const sortedDays = Object.keys(dailyChanges).sort();
+        const sortedDays = Object.keys(dailyData).sort();
         const labels = [];
         const realizadoData = [];
         const projetadoData = [];
         const simuladoData = [];
         const comparadoData = [];
 
-        let runningSaldoRealizado = saldoAnterior;
-        let runningSaldoProjetado = saldoAnterior;
+        let saldoRealizado = saldoAnterior;
+        let saldoProjetado = saldoAnterior;
+        let saldoSimulado = saldoAnterior;
+        let saldoComparado = saldoAnterior;
+        let lastRealizedDayIndex = -1;
 
-        sortedDays.forEach(day => {
+        sortedDays.forEach((day, index) => {
             labels.push(new Date(day + 'T00:00:00').toLocaleDateString('pt-BR'));
-            const changes = dailyChanges[day];
 
-            // Update the cumulative balances correctly
-            runningSaldoRealizado += changes.realizado;
-            runningSaldoProjetado += changes.realizado + changes.projetado;
+            saldoRealizado += dailyData[day].realizado;
+            saldoProjetado = saldoRealizado + dailyData[day].projetado;
 
-            let saldoSimuladoDoDia;
-            let saldoComparadoDoDia;
-
-            if (includeProjections) {
-                saldoSimuladoDoDia = runningSaldoProjetado + changes.simulado;
-                saldoComparadoDoDia = runningSaldoProjetado + changes.comparado;
+            if(includeProjections) {
+                saldoSimulado = saldoProjetado + dailyData[day].simulado;
+                saldoComparado = saldoProjetado + dailyData[day].comparado;
             } else {
-                saldoSimuladoDoDia = runningSaldoRealizado + changes.simulado;
-                saldoComparadoDoDia = runningSaldoRealizado + changes.comparado;
+                saldoSimulado = saldoRealizado + dailyData[day].simulado;
+                saldoComparado = saldoRealizado + dailyData[day].comparado;
             }
 
-            realizadoData.push(runningSaldoRealizado / 100);
-            projetadoData.push(runningSaldoProjetado / 100);
-            simuladoData.push(saldoSimuladoDoDia / 100);
-            comparadoData.push(saldoComparadoDoDia / 100);
+            if (dailyData[day].realizado !== 0) {
+                 lastRealizedDayIndex = index;
+            }
+
+            realizadoData.push(saldoRealizado / 100);
+            projetadoData.push(saldoProjetado / 100);
+            simuladoData.push(saldoSimulado / 100);
+            comparadoData.push(saldoComparado / 100);
         });
 
-        return { labels, realizadoData, projetadoData, simuladoData, comparadoData };
+        // After the last realized day, the "realizado" line should be flat.
+        if (lastRealizedDayIndex > -1) {
+            for (let i = lastRealizedDayIndex + 1; i < labels.length; i++) {
+                realizadoData[i] = realizadoData[lastRealizedDayIndex];
+            }
+        }
+
+        return { labels, realizadoData, projetadoData, simuladoData, comparadoData, lastRealizedDayIndex };
     }
     function processReceitaVsDespesaData(transactions) {
         const monthlyData = {};
@@ -899,24 +904,16 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             chartInstances.whatIfEvolucaoSaldo.destroy();
         }
 
-        const showRealizado = visaoRealizadoCheckbox.checked;
-        const showProjetado = visaoProjetadoCheckbox.checked;
-
-        const datasets = [];
-
-        if (showRealizado) {
-            datasets.push({
+        const datasets = [
+            {
                 label: 'Saldo Realizado',
                 data: realizadoData,
                 borderColor: 'rgba(54, 162, 235, 1)',
                 backgroundColor: 'rgba(54, 162, 235, 0.2)',
                 fill: false,
                 tension: 0.1
-            });
-        }
-
-        if (showProjetado) {
-            datasets.push({
+            },
+            {
                 label: 'Projeção Base',
                 data: projetadoData,
                 borderColor: 'rgba(255, 159, 64, 1)',
@@ -924,11 +921,8 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 backgroundColor: 'rgba(255, 159, 64, 0.2)',
                 fill: false,
                 tension: 0.1
-            });
-        }
-
-        if (whatIfScenario.length > 0 && (showRealizado || showProjetado)) {
-            datasets.push({
+            },
+            {
                 label: 'Projeção Simulada',
                 data: simuladoData,
                 borderColor: 'rgba(75, 192, 192, 1)',
@@ -936,10 +930,10 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 backgroundColor: 'rgba(75, 192, 192, 0.2)',
                 fill: false,
                 tension: 0.1
-            });
-        }
+            }
+        ];
 
-        if (comparisonScenario && (showRealizado || showProjetado)) {
+        if (comparisonScenario) {
             datasets.push({
                 label: 'Projeção Comparada',
                 data: comparadoData,
@@ -949,12 +943,6 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 fill: false,
                 tension: 0.1
             });
-        }
-
-        if (datasets.length === 0) {
-             // If no datasets, clear the canvas
-            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-            return;
         }
 
         chartInstances.whatIfEvolucaoSaldo = new Chart(ctx, {
