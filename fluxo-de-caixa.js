@@ -667,6 +667,8 @@ export function initializeFluxoDeCaixa(db, userId, common) {
 
         let runningSaldoRealizado = saldoAnterior;
         let runningSaldoProjetado = saldoAnterior;
+        let cumulativeSimuladoChange = 0;
+        let cumulativeComparadoChange = 0;
 
         sortedDays.forEach(day => {
             labels.push(new Date(day + 'T00:00:00').toLocaleDateString('pt-BR'));
@@ -675,16 +677,19 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             // Update the cumulative balances correctly
             runningSaldoRealizado += changes.realizado;
             runningSaldoProjetado += changes.realizado + changes.projetado;
+            cumulativeSimuladoChange += changes.simulado;
+            cumulativeComparadoChange += changes.comparado;
+
 
             let saldoSimuladoDoDia;
             let saldoComparadoDoDia;
 
             if (includeProjections) {
-                saldoSimuladoDoDia = runningSaldoProjetado + changes.simulado;
-                saldoComparadoDoDia = runningSaldoProjetado + changes.comparado;
+                saldoSimuladoDoDia = runningSaldoProjetado + cumulativeSimuladoChange;
+                saldoComparadoDoDia = runningSaldoProjetado + cumulativeComparadoChange;
             } else {
-                saldoSimuladoDoDia = runningSaldoRealizado + changes.simulado;
-                saldoComparadoDoDia = runningSaldoRealizado + changes.comparado;
+                saldoSimuladoDoDia = runningSaldoRealizado + cumulativeSimuladoChange;
+                saldoComparadoDoDia = runningSaldoRealizado + cumulativeComparadoChange;
             }
 
             realizadoData.push(runningSaldoRealizado / 100);
