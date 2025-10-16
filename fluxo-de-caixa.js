@@ -606,9 +606,17 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         // 7. What-If Chart
         const whatIfData = processWhatIfEvolucaoSaldoData(transactions, saldoAnterior);
         renderWhatIfEvolucaoSaldoChart(whatIfData);
-        whatIfSaldoInicialEl.textContent = formatCurrency(saldoAnterior);
-        whatIfSaldoProjetadoEl.textContent = formatCurrency(whatIfData.projetadoData.length > 0 ? whatIfData.projetadoData[whatIfData.projetadoData.length - 1] * 100 : saldoAnterior);
-        whatIfSaldoSimuladoEl.textContent = formatCurrency(whatIfData.simuladoData.length > 0 ? whatIfData.simuladoData[whatIfData.simuladoData.length - 1] * 100 : saldoAnterior);
+
+        const showProjetado = visaoProjetadoCheckbox.checked;
+        const showRealizado = visaoRealizadoCheckbox.checked;
+
+        whatIfSaldoInicialEl.textContent = showRealizado ? formatCurrency(saldoAnterior) : 'N/A';
+        whatIfSaldoProjetadoEl.textContent = showProjetado ? formatCurrency(whatIfData.projetadoData.length > 0 ? whatIfData.projetadoData[whatIfData.projetadoData.length - 1] * 100 : saldoAnterior) : 'N/A';
+        whatIfSaldoSimuladoEl.textContent = whatIfScenario.length > 0 ? formatCurrency(whatIfData.simuladoData.length > 0 ? whatIfData.simuladoData[whatIfData.simuladoData.length - 1] * 100 : saldoAnterior) : 'N/A';
+
+        whatIfSaldoProjetadoEl.parentElement.classList.toggle('hidden', !showProjetado);
+        whatIfSaldoSimuladoEl.parentElement.classList.toggle('hidden', whatIfScenario.length === 0);
+
         whatIfSaldoComparadoEl.textContent = formatCurrency(whatIfData.comparadoData.length > 0 ? whatIfData.comparadoData[whatIfData.comparadoData.length - 1] * 100 : 0);
         whatIfSaldoComparadoEl.parentElement.classList.toggle('hidden', !comparisonScenario);
     }
@@ -616,70 +624,69 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     // --- Data Processing Functions ---
     function processWhatIfEvolucaoSaldoData(transactions, saldoAnterior) {
         const includeProjections = whatIfIncludeProjectionsCheckbox.checked;
-        const dailyData = {};
+        const dailyChanges = {};
 
+        // Aggregate all changes by day and type
         transactions.forEach(t => {
             const day = t.data;
-            if (!dailyData[day]) {
-                dailyData[day] = { realizado: 0, projetado: 0, simulado: 0, comparado: 0 };
+            if (!day) {
+                console.warn("Transaction without a date found:", t);
+                return; // Skip this transaction
             }
+            if (!dailyChanges[day]) {
+                dailyChanges[day] = { realizado: 0, projetado: 0, simulado: 0, comparado: 0 };
+            }
+            const entrada = typeof t.entrada === 'number' ? t.entrada : 0;
+            const saida = typeof t.saida === 'number' ? t.saida : 0;
+            const netChange = entrada - saida;
 
             if (t.isComparison) {
-                dailyData[day].comparado += (t.entrada - t.saida);
+                dailyChanges[day].comparado += netChange;
             } else if (t.isSimulated) {
-                dailyData[day].simulado += (t.entrada - t.saida);
+                dailyChanges[day].simulado += netChange;
             } else if (t.isProjected) {
-                dailyData[day].projetado += (t.entrada - t.saida);
+                dailyChanges[day].projetado += netChange;
             } else {
-                dailyData[day].realizado += (t.entrada - t.saida);
+                dailyChanges[day].realizado += netChange;
             }
         });
 
-        const sortedDays = Object.keys(dailyData).sort();
+        const sortedDays = Object.keys(dailyChanges).sort();
         const labels = [];
         const realizadoData = [];
         const projetadoData = [];
         const simuladoData = [];
         const comparadoData = [];
 
-        let saldoRealizado = saldoAnterior;
-        let saldoProjetado = saldoAnterior;
-        let saldoSimulado = saldoAnterior;
-        let saldoComparado = saldoAnterior;
-        let lastRealizedDayIndex = -1;
+        let runningSaldoRealizado = saldoAnterior;
+        let runningSaldoProjetado = saldoAnterior;
 
-        sortedDays.forEach((day, index) => {
+        sortedDays.forEach(day => {
             labels.push(new Date(day + 'T00:00:00').toLocaleDateString('pt-BR'));
+            const changes = dailyChanges[day];
 
-            saldoRealizado += dailyData[day].realizado;
-            saldoProjetado = saldoRealizado + dailyData[day].projetado;
+            // Update the cumulative balances correctly
+            runningSaldoRealizado += changes.realizado;
+            runningSaldoProjetado += changes.realizado + changes.projetado;
 
-            if(includeProjections) {
-                saldoSimulado = saldoProjetado + dailyData[day].simulado;
-                saldoComparado = saldoProjetado + dailyData[day].comparado;
+            let saldoSimuladoDoDia;
+            let saldoComparadoDoDia;
+
+            if (includeProjections) {
+                saldoSimuladoDoDia = runningSaldoProjetado + changes.simulado;
+                saldoComparadoDoDia = runningSaldoProjetado + changes.comparado;
             } else {
-                saldoSimulado = saldoRealizado + dailyData[day].simulado;
-                saldoComparado = saldoRealizado + dailyData[day].comparado;
+                saldoSimuladoDoDia = runningSaldoRealizado + changes.simulado;
+                saldoComparadoDoDia = runningSaldoRealizado + changes.comparado;
             }
 
-            if (dailyData[day].realizado !== 0) {
-                 lastRealizedDayIndex = index;
-            }
-
-            realizadoData.push(saldoRealizado / 100);
-            projetadoData.push(saldoProjetado / 100);
-            simuladoData.push(saldoSimulado / 100);
-            comparadoData.push(saldoComparado / 100);
+            realizadoData.push(runningSaldoRealizado / 100);
+            projetadoData.push(runningSaldoProjetado / 100);
+            simuladoData.push(saldoSimuladoDoDia / 100);
+            comparadoData.push(saldoComparadoDoDia / 100);
         });
 
-        // After the last realized day, the "realizado" line should be flat.
-        if (lastRealizedDayIndex > -1) {
-            for (let i = lastRealizedDayIndex + 1; i < labels.length; i++) {
-                realizadoData[i] = realizadoData[lastRealizedDayIndex];
-            }
-        }
-
-        return { labels, realizadoData, projetadoData, simuladoData, comparadoData, lastRealizedDayIndex };
+        return { labels, realizadoData, projetadoData, simuladoData, comparadoData };
     }
     function processReceitaVsDespesaData(transactions) {
         const monthlyData = {};
@@ -892,16 +899,24 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             chartInstances.whatIfEvolucaoSaldo.destroy();
         }
 
-        const datasets = [
-            {
+        const showRealizado = visaoRealizadoCheckbox.checked;
+        const showProjetado = visaoProjetadoCheckbox.checked;
+
+        const datasets = [];
+
+        if (showRealizado) {
+            datasets.push({
                 label: 'Saldo Realizado',
                 data: realizadoData,
                 borderColor: 'rgba(54, 162, 235, 1)',
                 backgroundColor: 'rgba(54, 162, 235, 0.2)',
                 fill: false,
                 tension: 0.1
-            },
-            {
+            });
+        }
+
+        if (showProjetado) {
+            datasets.push({
                 label: 'Projeção Base',
                 data: projetadoData,
                 borderColor: 'rgba(255, 159, 64, 1)',
@@ -909,8 +924,11 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 backgroundColor: 'rgba(255, 159, 64, 0.2)',
                 fill: false,
                 tension: 0.1
-            },
-            {
+            });
+        }
+
+        if (whatIfScenario.length > 0 && (showRealizado || showProjetado)) {
+            datasets.push({
                 label: 'Projeção Simulada',
                 data: simuladoData,
                 borderColor: 'rgba(75, 192, 192, 1)',
@@ -918,10 +936,10 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 backgroundColor: 'rgba(75, 192, 192, 0.2)',
                 fill: false,
                 tension: 0.1
-            }
-        ];
+            });
+        }
 
-        if (comparisonScenario) {
+        if (comparisonScenario && (showRealizado || showProjetado)) {
             datasets.push({
                 label: 'Projeção Comparada',
                 data: comparadoData,
@@ -931,6 +949,12 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 fill: false,
                 tension: 0.1
             });
+        }
+
+        if (datasets.length === 0) {
+             // If no datasets, clear the canvas
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            return;
         }
 
         chartInstances.whatIfEvolucaoSaldo = new Chart(ctx, {
