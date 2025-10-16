@@ -196,39 +196,42 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 unifiedTransactions.push(...projectedTransactions);
             }
 
-            // Isolate base transactions before adding simulations
             const baseTransactions = [...unifiedTransactions];
+            let whatIfTransactions = [...baseTransactions]; // Start with base transactions
 
-            // Create a separate list for what-if analysis
-            let whatIfTransactions = [...unifiedTransactions];
-
-            // Add What-If scenario transactions to the separate list
-            const simulatedTransactions = whatIfScenario.map(item => ({
-                ...item,
-                isProjected: true,
-                isSimulated: true,
-                isComparison: false,
-                descricao: `(Simulado) ${item.descricao}`,
-                participante: 'Simulação',
-                planoDeConta: 'Simulação',
-                dataVencimento: item.data,
-                entrada: item.type === 'receita' ? item.valor : 0,
-                saida: item.type === 'despesa' ? item.valor : 0,
-            }));
-            whatIfTransactions.push(...simulatedTransactions);
+            // Add simulated transactions to the what-if list
+            if (whatIfScenario.length > 0) {
+                const simulatedTransactions = whatIfScenario.map(item => ({
+                    ...item,
+                    isProjected: true, // Treat as projected for filtering
+                    isSimulated: true,
+                    isComparison: false,
+                    data: item.data,
+                    descricao: `(Simulado) ${item.descricao}`,
+                    participante: 'Simulação',
+                    planoDeConta: 'Simulação',
+                    dataVencimento: item.data,
+                    entrada: item.type === 'receita' ? item.valor : 0,
+                    saida: item.type === 'despesa' ? item.valor : 0,
+                    conciliado: false, // Simulated transactions are not conciled
+                }));
+                whatIfTransactions.push(...simulatedTransactions);
+            }
 
             if (comparisonScenario) {
                 const comparisonTransactions = comparisonScenario.map(item => ({
                     ...item,
-                    isProjected: true,
+                    isProjected: true, // Treat as projected for filtering
                     isSimulated: true,
                     isComparison: true,
+                    data: item.data,
                     descricao: `(Comparado) ${item.descricao}`,
                     participante: 'Comparação',
                     planoDeConta: 'Comparação',
                     dataVencimento: item.data,
                     entrada: item.type === 'receita' ? item.valor : 0,
                     saida: item.type === 'despesa' ? item.valor : 0,
+                    conciliado: false,
                 }));
                 whatIfTransactions.push(...comparisonTransactions);
             }
@@ -588,41 +591,49 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     function renderAllNewCharts(baseTransactions, whatIfTransactions, saldoAnterior) {
         destroyAllCharts();
 
-        // Charts for the main tabs (Extrato, Gerencial, Gráficos) use baseTransactions
-        const receitaVsDespesaData = processReceitaVsDespesaData(baseTransactions);
-        renderReceitaVsDespesaChart(receitaVsDespesaData);
+        const activeTab = document.querySelector('.fluxo-tab-link.active')?.dataset.fluxoTab;
 
-        const acumuladoMensalData = processAcumuladoMensalData(baseTransactions);
-        renderAcumuladoMensalChart(acumuladoMensalData);
+        if (activeTab === 'graficos') {
+            const receitaVsDespesaData = processReceitaVsDespesaData(baseTransactions);
+            renderReceitaVsDespesaChart(receitaVsDespesaData);
 
-        const evolucaoSaldoData = processEvolucaoSaldoData(baseTransactions, saldoAnterior);
-        renderEvolucaoSaldoChart(evolucaoSaldoData);
+            const acumuladoMensalData = processAcumuladoMensalData(baseTransactions);
+            renderAcumuladoMensalChart(acumuladoMensalData);
 
-        const despesasCategoriaData = processDespesasCategoriaData(baseTransactions);
-        renderDespesasCategoriaChart(despesasCategoriaData);
+            const evolucaoSaldoData = processEvolucaoSaldoData(baseTransactions, saldoAnterior);
+            renderEvolucaoSaldoChart(evolucaoSaldoData);
 
-        const { topReceitas, topDespesas } = processTop5Data(baseTransactions);
-        renderTop5ReceitasChart(topReceitas);
-        renderTop5DespesasChart(topDespesas);
+            const despesasCategoriaData = processDespesasCategoriaData(baseTransactions);
+            renderDespesasCategoriaChart(despesasCategoriaData);
 
-        processAndRenderComparativoPeriodos();
+            const { topReceitas, topDespesas } = processTop5Data(baseTransactions);
+            renderTop5ReceitasChart(topReceitas);
+            renderTop5DespesasChart(topDespesas);
 
-        // What-If Chart uses whatIfTransactions
-        const whatIfData = processWhatIfEvolucaoSaldoData(whatIfTransactions, saldoAnterior);
-        renderWhatIfEvolucaoSaldoChart(whatIfData);
+            processAndRenderComparativoPeriodos();
+        }
 
-        const showProjetado = visaoProjetadoCheckbox.checked;
-        const showRealizado = visaoRealizadoCheckbox.checked;
+        if (activeTab === 'what-if') {
+            const whatIfData = processWhatIfEvolucaoSaldoData(whatIfTransactions, saldoAnterior);
+            renderWhatIfEvolucaoSaldoChart(whatIfData);
 
-        whatIfSaldoInicialEl.textContent = showRealizado ? formatCurrency(saldoAnterior) : 'N/A';
-        whatIfSaldoProjetadoEl.textContent = showProjetado ? formatCurrency(whatIfData.projetadoData.length > 0 ? whatIfData.projetadoData[whatIfData.projetadoData.length - 1] * 100 : saldoAnterior) : 'N/A';
-        whatIfSaldoSimuladoEl.textContent = whatIfScenario.length > 0 ? formatCurrency(whatIfData.simuladoData.length > 0 ? whatIfData.simuladoData[whatIfData.simuladoData.length - 1] * 100 : saldoAnterior) : 'N/A';
+            const showProjetado = whatIfIncludeProjectionsCheckbox.checked;
+            const showRealizado = visaoRealizadoCheckbox.checked;
 
-        whatIfSaldoProjetadoEl.parentElement.classList.toggle('hidden', !showProjetado);
-        whatIfSaldoSimuladoEl.parentElement.classList.toggle('hidden', whatIfScenario.length === 0);
+            whatIfSaldoInicialEl.textContent = showRealizado ? formatCurrency(saldoAnterior) : 'N/A';
+            const saldoProjetadoFinal = whatIfData.projetadoData.length > 0 ? whatIfData.projetadoData[whatIfData.projetadoData.length - 1] : (saldoAnterior / 100);
+            whatIfSaldoProjetadoEl.textContent = showProjetado ? formatCurrency(saldoProjetadoFinal * 100) : 'N/A';
 
-        whatIfSaldoComparadoEl.textContent = formatCurrency(whatIfData.comparadoData.length > 0 ? whatIfData.comparadoData[whatIfData.comparadoData.length - 1] * 100 : 0);
-        whatIfSaldoComparadoEl.parentElement.classList.toggle('hidden', !comparisonScenario);
+            const saldoSimuladoFinal = whatIfData.simuladoData.length > 0 ? whatIfData.simuladoData[whatIfData.simuladoData.length - 1] : saldoProjetadoFinal;
+            whatIfSaldoSimuladoEl.textContent = formatCurrency(saldoSimuladoFinal * 100);
+
+            whatIfSaldoProjetadoEl.parentElement.classList.toggle('hidden', !showProjetado);
+            whatIfSaldoSimuladoEl.parentElement.classList.toggle('hidden', whatIfScenario.length === 0);
+
+            const saldoComparadoFinal = whatIfData.comparadoData.length > 0 ? whatIfData.comparadoData[whatIfData.comparadoData.length - 1] : 0;
+            whatIfSaldoComparadoEl.textContent = formatCurrency(saldoComparadoFinal * 100);
+            whatIfSaldoComparadoEl.parentElement.classList.toggle('hidden', !comparisonScenario);
+        }
     }
 
     // --- Data Processing Functions ---
@@ -904,16 +915,23 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             chartInstances.whatIfEvolucaoSaldo.destroy();
         }
 
-        const datasets = [
-            {
+        const showRealizado = visaoRealizadoCheckbox.checked;
+        const showProjetado = visaoProjetadoCheckbox.checked;
+        const datasets = [];
+
+        if (showRealizado) {
+            datasets.push({
                 label: 'Saldo Realizado',
                 data: realizadoData,
                 borderColor: 'rgba(54, 162, 235, 1)',
                 backgroundColor: 'rgba(54, 162, 235, 0.2)',
                 fill: false,
                 tension: 0.1
-            },
-            {
+            });
+        }
+
+        if (showProjetado) {
+            datasets.push({
                 label: 'Projeção Base',
                 data: projetadoData,
                 borderColor: 'rgba(255, 159, 64, 1)',
@@ -921,17 +939,21 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 backgroundColor: 'rgba(255, 159, 64, 0.2)',
                 fill: false,
                 tension: 0.1
-            },
-            {
+            });
+        }
+
+        // Only add the simulated line if there are items in the what-if scenario
+        if (whatIfScenario.length > 0) {
+            datasets.push({
                 label: 'Projeção Simulada',
                 data: simuladoData,
                 borderColor: 'rgba(75, 192, 192, 1)',
-                 borderDash: [5, 5],
+                borderDash: [5, 5],
                 backgroundColor: 'rgba(75, 192, 192, 0.2)',
                 fill: false,
                 tension: 0.1
-            }
-        ];
+            });
+        }
 
         if (comparisonScenario) {
             datasets.push({
@@ -1428,6 +1450,12 @@ export function initializeFluxoDeCaixa(db, userId, common) {
 
         if (!descricao || !valorTotal || !dataInicio) {
             alert("Por favor, preencha Descrição, Valor e Data de Início.");
+            return;
+        }
+
+        const testDate = new Date(dataInicio + 'T00:00:00');
+        if (isNaN(testDate.getTime())) {
+            alert("A Data de Início fornecida é inválida.");
             return;
         }
 
