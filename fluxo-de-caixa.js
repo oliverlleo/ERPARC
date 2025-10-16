@@ -629,10 +629,16 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         // Aggregate all changes by day and type
         transactions.forEach(t => {
             const day = t.data;
+            if (!day) {
+                console.warn("Transaction without a date found:", t);
+                return; // Skip this transaction
+            }
             if (!dailyChanges[day]) {
                 dailyChanges[day] = { realizado: 0, projetado: 0, simulado: 0, comparado: 0 };
             }
-            const netChange = (t.entrada || 0) - (t.saida || 0);
+            const entrada = typeof t.entrada === 'number' ? t.entrada : 0;
+            const saida = typeof t.saida === 'number' ? t.saida : 0;
+            const netChange = entrada - saida;
 
             if (t.isComparison) {
                 dailyChanges[day].comparado += netChange;
