@@ -46,6 +46,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     const cenariosSalvosList = document.getElementById('cenarios-salvos-list');
     const whatIfSaldoInicialEl = document.getElementById('what-if-saldo-inicial');
     const whatIfSaldoProjetadoEl = document.getElementById('what-if-saldo-projetado');
+    const whatIfSaldoBaseLabelEl = document.getElementById('what-if-saldo-base-label');
     const whatIfSaldoSimuladoEl = document.getElementById('what-if-saldo-simulado');
     const whatIfSaldoComparadoEl = document.getElementById('what-if-saldo-comparado');
     const whatIfIncludeProjectionsCheckbox = document.getElementById('what-if-include-projections');
@@ -170,7 +171,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         if (!showRealizado && !showProjetado) {
             extratoTableBody.innerHTML = `<tr><td colspan="12" class="text-center p-8 text-gray-500">Selecione uma visão (Realizado e/ou Projetado).</td></tr>`;
             renderKPIs({ saldoAnterior: 0, totalEntradas: 0, totalSaidas: 0, resultadoLiquido: 0, saldoFinal: 0 });
-            destroyAllCharts(); // Correct function to clear charts
+            destroyAllCharts();
             renderDRE([]);
             return;
         }
@@ -179,8 +180,9 @@ export function initializeFluxoDeCaixa(db, userId, common) {
 
         try {
             const saldoAnterior = await calculateSaldoAnterior(startDate, contaId);
-            let unifiedTransactions = [];
+            let baseTransactions = [];
 
+            // 1. Fetch base data (Realizado and/or Projetado)
             if (showRealizado) {
                 const [pagamentos, recebimentos, transferencias] = await Promise.all([
                     fetchTransactionsEfficiently('despesas', 'pagamentos', startDate, endDate),
@@ -188,18 +190,28 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                     fetchCollection('transferencias', startDate, endDate)
                 ]);
                 const realizedTransactions = await enrichAndUnifyTransactions(pagamentos, recebimentos, transferencias);
-                unifiedTransactions.push(...realizedTransactions);
+                baseTransactions.push(...realizedTransactions);
             }
-
             if (showProjetado) {
                 const projectedTransactions = await fetchProjectedTransactions(startDate, endDate);
-                unifiedTransactions.push(...projectedTransactions);
+                baseTransactions.push(...projectedTransactions);
             }
 
-            // Add What-If scenario transactions
+            baseTransactions.sort((a, b) => new Date(a.data) - new Date(b.data));
+            baseTransactions = applyFilters(baseTransactions, contaId, activeConciliacaoFilter);
+
+            // 2. Calculate and Render main UI components with base data ONLY
+            const kpis = calculateKPIs(saldoAnterior, baseTransactions, contaId);
+            renderKPIs(kpis);
+            renderExtrato(baseTransactions, kpis.saldoAnterior);
+            renderDRE(baseTransactions);
+
+            // 3. Create a separate list for What-If analysis
+            let whatIfTransactions = [...baseTransactions];
+
             const simulatedTransactions = whatIfScenario.map(item => ({
                 ...item,
-                isProjected: true,
+                isProjected: true, // Treat as projected for calculations
                 isSimulated: true,
                 isComparison: false,
                 descricao: `(Simulado) ${item.descricao}`,
@@ -209,12 +221,12 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 entrada: item.type === 'receita' ? item.valor : 0,
                 saida: item.type === 'despesa' ? item.valor : 0,
             }));
-            unifiedTransactions.push(...simulatedTransactions);
+            whatIfTransactions.push(...simulatedTransactions);
 
             if (comparisonScenario) {
                 const comparisonTransactions = comparisonScenario.map(item => ({
                     ...item,
-                    isProjected: true,
+                    isProjected: true, // Treat as projected for calculations
                     isSimulated: true,
                     isComparison: true,
                     descricao: `(Comparado) ${item.descricao}`,
@@ -224,22 +236,14 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                     entrada: item.type === 'receita' ? item.valor : 0,
                     saida: item.type === 'despesa' ? item.valor : 0,
                 }));
-                unifiedTransactions.push(...comparisonTransactions);
+                whatIfTransactions.push(...comparisonTransactions);
             }
 
-            unifiedTransactions.sort((a, b) => new Date(a.data) - new Date(b.data));
+            whatIfTransactions.sort((a, b) => new Date(a.data) - new Date(b.data));
 
-            // 4. Apply Filters
-            unifiedTransactions = applyFilters(unifiedTransactions, contaId, activeConciliacaoFilter);
-
-            // 5. Calculate KPIs
-            const kpis = calculateKPIs(saldoAnterior, unifiedTransactions, contaId);
-
-            // 6. Render UI
-            renderKPIs(kpis);
-            renderExtrato(unifiedTransactions, kpis.saldoAnterior);
-            renderDRE(unifiedTransactions);
-            renderAllNewCharts(unifiedTransactions, kpis.saldoAnterior);
+            // 4. Render all charts
+            // The What-If chart will use the extended list, others will use the base list.
+            renderAllNewCharts(baseTransactions, whatIfTransactions, saldoAnterior, kpis.saldoFinal);
 
         } catch (error) {
             console.error("Error calculating cash flow:", error);
@@ -575,48 +579,51 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         chartInstances = {};
     }
 
-    function renderAllNewCharts(transactions, saldoAnterior) {
+    function renderAllNewCharts(baseTransactions, whatIfTransactions, saldoAnterior, saldoFinalRealizado) {
         destroyAllCharts();
 
-        // 1. Receita vs. Despesa Mensal
-        const receitaVsDespesaData = processReceitaVsDespesaData(transactions);
+        // Charts that use ONLY base transactions (real + projected)
+        const receitaVsDespesaData = processReceitaVsDespesaData(baseTransactions);
         renderReceitaVsDespesaChart(receitaVsDespesaData);
 
-        // 2. Acumulado Mensal
-        const acumuladoMensalData = processAcumuladoMensalData(transactions);
+        const acumuladoMensalData = processAcumuladoMensalData(baseTransactions);
         renderAcumuladoMensalChart(acumuladoMensalData);
 
-        // 3. Evolução do Saldo da Conta
-        const evolucaoSaldoData = processEvolucaoSaldoData(transactions, saldoAnterior);
+        const evolucaoSaldoData = processEvolucaoSaldoData(baseTransactions, saldoAnterior);
         renderEvolucaoSaldoChart(evolucaoSaldoData);
 
-        // 4. Análise de Despesas por Categoria
-        const despesasCategoriaData = processDespesasCategoriaData(transactions);
+        const despesasCategoriaData = processDespesasCategoriaData(baseTransactions);
         renderDespesasCategoriaChart(despesasCategoriaData);
 
-        // 5. Top 5 Despesas e Receitas
-        const { topReceitas, topDespesas } = processTop5Data(transactions);
+        const { topReceitas, topDespesas } = processTop5Data(baseTransactions);
         renderTop5ReceitasChart(topReceitas);
         renderTop5DespesasChart(topDespesas);
 
-        // 6. Comparativo de Períodos
-        // This will require an additional data fetch, handled inside its process function.
-        processAndRenderComparativoPeriodos();
+        processAndRenderComparativoPeriodos(); // This fetches its own data
 
-        // 7. What-If Chart
-        const whatIfData = processWhatIfEvolucaoSaldoData(transactions, saldoAnterior);
+        // What-If chart uses the special extended transaction list
+        const whatIfData = processWhatIfEvolucaoSaldoData(whatIfTransactions, saldoAnterior);
         renderWhatIfEvolucaoSaldoChart(whatIfData);
 
+        // Update What-If KPIs
         const showProjetado = visaoProjetadoCheckbox.checked;
         const showRealizado = visaoRealizadoCheckbox.checked;
 
         whatIfSaldoInicialEl.textContent = showRealizado ? formatCurrency(saldoAnterior) : 'N/A';
-        whatIfSaldoProjetadoEl.textContent = showProjetado ? formatCurrency(whatIfData.projetadoData.length > 0 ? whatIfData.projetadoData[whatIfData.projetadoData.length - 1] * 100 : saldoAnterior) : 'N/A';
+
+        // Conditional "Saldo Projetado (Base)" display logic
+        if (showProjetado) {
+            whatIfSaldoBaseLabelEl.textContent = 'Saldo Projetado (Base)';
+            whatIfSaldoProjetadoEl.textContent = formatCurrency(whatIfData.projetadoData.length > 0 ? whatIfData.projetadoData[whatIfData.projetadoData.length - 1] * 100 : saldoAnterior);
+        } else {
+            // When only "Realizado" is checked, show the final realized balance
+            whatIfSaldoBaseLabelEl.textContent = 'Saldo Final (Realizado)';
+            whatIfSaldoProjetadoEl.textContent = formatCurrency(saldoFinalRealizado);
+        }
+
         whatIfSaldoSimuladoEl.textContent = whatIfScenario.length > 0 ? formatCurrency(whatIfData.simuladoData.length > 0 ? whatIfData.simuladoData[whatIfData.simuladoData.length - 1] * 100 : saldoAnterior) : 'N/A';
-
-        whatIfSaldoProjetadoEl.parentElement.classList.toggle('hidden', !showProjetado);
+        whatIfSaldoProjetadoEl.parentElement.classList.toggle('hidden', !showRealizado && !showProjetado);
         whatIfSaldoSimuladoEl.parentElement.classList.toggle('hidden', whatIfScenario.length === 0);
-
         whatIfSaldoComparadoEl.textContent = formatCurrency(whatIfData.comparadoData.length > 0 ? whatIfData.comparadoData[whatIfData.comparadoData.length - 1] * 100 : 0);
         whatIfSaldoComparadoEl.parentElement.classList.toggle('hidden', !comparisonScenario);
     }
