@@ -109,6 +109,27 @@
             display: none;
         }
     }
+
+    /* Estilos para o slider horizontal de abas no mobile */
+    @media (max-width: 768px) {
+        .mobile-scrollable {
+            overflow-x: auto;
+            white-space: nowrap;
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+        .mobile-scrollable::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, and Opera */
+        }
+        .mobile-scrollable .tab-link,
+        .mobile-scrollable .tab-link-financeiro,
+        .mobile-scrollable .cliente-tab-link,
+        .mobile-scrollable .funcionario-tab-link,
+        .mobile-scrollable .fornecedor-tab-link {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+    }
   </style>
 </head>
 
@@ -206,7 +227,7 @@
   <div id="main-page" class="view-container min-h-screen w-full">
      <div class="relative flex size-full min-h-screen flex-col group/design-root w-full">
         <div class="layout-container flex h-full grow flex-col w-full">
-            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-4 sm:px-10 py-3">
+            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-10 py-3">
                 <a href="#" class="flex items-center gap-4 text-gray-800 nav-link" data-target="main-page">
                     <div class="size-8 text-[var(--primary-color)]">
                         <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M4 8L24 4L44 8L24 12L4 8Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 24L24 20L44 24L24 28L4 24Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 40L24 36L44 40L24 44L4 40Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path></svg>
@@ -254,7 +275,7 @@
                     </button>
                 </div>
             </header>
-            <main class="flex-1 px-4 sm:px-10 py-8">
+            <main class="flex-1 px-10 py-8">
                 <div class="layout-content-container mx-auto flex max-w-7xl flex-col gap-8">
                     <div class="flex flex-col gap-2">
                         <h1 class="text-gray-900 text-3xl font-bold leading-tight tracking-tight">Painel</h1>
@@ -432,7 +453,7 @@
   <div id="cadastros-page" class="view-container min-h-screen w-full">
     <div class="relative flex size-full min-h-screen flex-col group/design-root w-full">
         <div class="layout-container flex h-full grow flex-col w-full">
-            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-4 sm:px-10 py-3">
+            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-10 py-3">
                 <a href="#" class="flex items-center gap-4 text-gray-800 nav-link" data-target="main-page">
                     <div class="size-8 text-[var(--primary-color)]">
                         <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M4 8L24 4L44 8L24 12L4 8Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 24L24 20L44 24L24 28L4 24Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 40L24 36L44 40L24 44L4 40Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path></svg>
@@ -480,7 +501,7 @@
                     </button>
                 </div>
             </header>
-            <main class="flex-1 px-4 sm:px-10 py-8">
+            <main class="flex-1 px-10 py-8">
                 <div class="layout-content-container mx-auto flex max-w-7xl flex-col gap-8">
                     <div class="flex flex-col gap-2">
                         <h1 class="text-gray-900 text-3xl font-bold leading-tight tracking-tight">Módulo de Cadastros</h1>
@@ -529,7 +550,7 @@
 
                         <!-- Abas/Tabs para navegação -->
                         <div class="border-b border-gray-200">
-                            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                            <nav class="-mb-px flex space-x-8 mobile-scrollable" aria-label="Tabs">
                                 <a href="#" class="tab-link active border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-tab="empresas">Empresas</a>
                                 <a href="#" class="tab-link border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-tab="usuarios">Usuários</a>
                                 <a href="#" class="tab-link border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-tab="perfis">Acessos de Usuário</a>
@@ -667,7 +688,7 @@
 
                         <!-- Abas/Tabs para navegação -->
                         <div class="border-b border-gray-200">
-                            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                            <nav class="-mb-px flex space-x-8 mobile-scrollable" aria-label="Tabs">
                                 <a href="#" class="tab-link-comercial active" data-tab-comercial="fornecedores">Fornecedores</a>
                                 <a href="#" class="tab-link-comercial" data-tab-comercial="clientes">Clientes</a>
                                 <a href="#" class="tab-link-comercial" data-tab-comercial="servicos">Serviços</a>
@@ -682,7 +703,7 @@
                                     <input type="hidden" id="fornecedor-id">
                                     <!-- Abas do Formulário de Fornecedor -->
                                     <div class="border-b border-gray-200">
-                                        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                                        <nav class="-mb-px flex space-x-8 mobile-scrollable" aria-label="Tabs">
                                             <a href="#" class="fornecedor-tab-link active border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-fornecedor-tab="fornecedor-dados-principais">Dados Principais</a>
                                             <a href="#" class="fornecedor-tab-link border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-fornecedor-tab="fornecedor-contato">Contato</a>
                                             <a href="#" class="fornecedor-tab-link border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-fornecedor-tab="fornecedor-endereco">Endereço</a>
@@ -785,7 +806,7 @@
                                     <input type="hidden" id="cliente-id">
                                     <!-- Abas do Formulário de Cliente -->
                                     <div class="border-b border-gray-200">
-                                        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                                        <nav class="-mb-px flex space-x-8 mobile-scrollable" aria-label="Tabs">
                                             <a href="#" class="cliente-tab-link active border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-cliente-tab="cliente-dados-principais">Dados Principais</a>
                                             <a href="#" class="cliente-tab-link border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-cliente-tab="cliente-contato">Contato</a>
                                             <a href="#" class="cliente-tab-link border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-cliente-tab="cliente-enderecos">Endereços</a>
@@ -1026,7 +1047,7 @@
 
                         <!-- Abas/Tabs para navegação -->
                         <div class="border-b border-gray-200">
-                            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                            <nav class="-mb-px flex space-x-8 mobile-scrollable" aria-label="Tabs">
                                 <a href="#" class="tab-link-financeiro active" data-tab-financeiro="planos-de-contas">Planos de Contas</a>
                                 <a href="#" class="tab-link-financeiro" data-tab-financeiro="contas-bancarias">Contas Bancárias</a>
                             </nav>
@@ -1167,7 +1188,7 @@
                             <input type="hidden" id="funcionario-id">
                             <!-- Abas do Formulário de Funcionário -->
                             <div class="border-b border-gray-200">
-                                <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                                <nav class="-mb-px flex space-x-8 mobile-scrollable" aria-label="Tabs">
                                     <a href="#" class="funcionario-tab-link active border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-funcionario-tab="pessoal">Dados Pessoais</a>
                                     <a href="#" class="funcionario-tab-link border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-funcionario-tab="contato">Contato e Endereço</a>
                                     <a href="#" class="funcionario-tab-link border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-funcionario-tab="contratual">Dados Contratuais</a>
@@ -1287,7 +1308,7 @@
   <div id="contas-a-pagar-page" class="view-container min-h-screen w-full">
     <div class="relative flex size-full min-h-screen flex-col group/design-root w-full">
         <div class="layout-container flex h-full grow flex-col w-full">
-            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-4 sm:px-10 py-3">
+            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-10 py-3">
                 <a href="#" class="flex items-center gap-4 text-gray-800 nav-link" data-target="main-page">
                     <div class="size-8 text-[var(--primary-color)]">
                         <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M4 8L24 4L44 8L24 12L4 8Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 24L24 20L44 24L24 28L4 24Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 40L24 36L44 40L24 44L4 40Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path></svg>
@@ -1335,7 +1356,7 @@
                     </button>
                 </div>
             </header>
-            <main class="flex-1 px-4 sm:px-10 py-8 bg-gray-50">
+            <main class="flex-1 px-10 py-8 bg-gray-50">
                 <div class="layout-content-container mx-auto flex max-w-7xl flex-col gap-8">
                     <div class="flex flex-col gap-2">
                         <h1 class="text-gray-900 text-3xl font-bold leading-tight tracking-tight">Módulo Financeiro</h1>
@@ -1833,7 +1854,7 @@
   <div id="contas-a-receber-page" class="view-container min-h-screen w-full">
     <div class="relative flex size-full min-h-screen flex-col group/design-root w-full">
         <div class="layout-container flex h-full grow flex-col w-full">
-            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-4 sm:px-10 py-3">
+            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-10 py-3">
                 <a href="#" class="flex items-center gap-4 text-gray-800 nav-link" data-target="main-page">
                     <div class="size-8 text-[var(--primary-color)]">
                         <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M4 8L24 4L44 8L24 12L4 8Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 24L24 20L44 24L24 28L4 24Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 40L24 36L44 40L24 44L4 40Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path></svg>
@@ -1881,7 +1902,7 @@
                     </button>
                 </div>
             </header>
-            <main class="flex-1 px-4 sm:px-10 py-8 bg-gray-50">
+            <main class="flex-1 px-10 py-8 bg-gray-50">
                 <div class="layout-content-container mx-auto flex max-w-7xl flex-col gap-8">
                     <div class="flex flex-col gap-2">
                         <h1 class="text-gray-900 text-3xl font-bold leading-tight tracking-tight">Módulo Financeiro</h1>
@@ -2395,7 +2416,7 @@
   <div id="fluxo-de-caixa-page" class="view-container min-h-screen w-full">
      <div class="relative flex size-full min-h-screen flex-col group/design-root w-full">
         <div class="layout-container flex h-full grow flex-col w-full">
-            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-4 sm:px-10 py-3">
+            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-10 py-3">
                 <a href="#" class="flex items-center gap-4 text-gray-800 nav-link" data-target="main-page">
                     <div class="size-8 text-[var(--primary-color)]">
                         <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M4 8L24 4L44 8L24 12L4 8Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 24L24 20L44 24L24 28L4 24Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 40L24 36L44 40L24 44L4 40Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path></svg>
@@ -2443,7 +2464,7 @@
                     </button>
                 </div>
             </header>
-            <main class="flex-1 px-4 sm:px-10 py-8 bg-gray-50">
+            <main class="flex-1 px-10 py-8 bg-gray-50">
                 <div class="layout-content-container mx-auto flex max-w-7xl flex-col gap-8">
                     <div class="flex justify-between items-center">
                         <div class="flex flex-col gap-2">
@@ -2892,7 +2913,7 @@
     <div id="relatorios-page" class="view-container min-h-screen w-full">
          <div class="relative flex size-full min-h-screen flex-col group/design-root w-full">
             <div class="layout-container flex h-full grow flex-col w-full">
-                <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-4 sm:px-10 py-3">
+                <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-10 py-3">
                     <a href="#" class="flex items-center gap-4 text-gray-800 nav-link" data-target="main-page">
                         <div class="size-8 text-[var(--primary-color)]">
                             <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M4 8L24 4L44 8L24 12L4 8Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 24L24 20L44 24L24 28L4 24Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 40L24 36L44 40L24 44L4 40Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path></svg>
@@ -2940,7 +2961,7 @@
                     </button>
                 </div>
                 </header>
-                <main class="flex-1 px-4 sm:px-10 py-8 bg-gray-50">
+                <main class="flex-1 px-10 py-8 bg-gray-50">
                     <div class="layout-content-container mx-auto flex max-w-7xl flex-col gap-8">
                         <div class="flex flex-col gap-2">
                             <h1 class="text-gray-900 text-3xl font-bold leading-tight tracking-tight">Relatórios Financeiros</h1>
@@ -3119,7 +3140,7 @@
   <div id="movimentacao-bancaria-page" class="view-container min-h-screen w-full">
      <div class="relative flex size-full min-h-screen flex-col group/design-root w-full">
         <div class="layout-container flex h-full grow flex-col w-full">
-            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-4 sm:px-10 py-3">
+            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-10 py-3">
                 <a href="#" class="flex items-center gap-4 text-gray-800 nav-link" data-target="main-page">
                     <div class="size-8 text-[var(--primary-color)]">
                         <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M4 8L24 4L44 8L24 12L4 8Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 24L24 20L44 24L24 28L4 24Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 40L24 36L44 40L24 44L4 40Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path></svg>
@@ -3166,7 +3187,7 @@
                     </button>
                 </div>
             </header>
-            <main class="flex-1 px-4 sm:px-10 py-8 bg-gray-50">
+            <main class="flex-1 px-10 py-8 bg-gray-50">
                 <div class="layout-content-container mx-auto flex max-w-7xl flex-col gap-8">
                     <div class="flex justify-between items-center">
                         <div class="flex flex-col gap-2">
@@ -3322,7 +3343,7 @@
   <div id="notifications-page" class="view-container min-h-screen w-full">
      <div class="relative flex size-full min-h-screen flex-col group/design-root w-full">
         <div class="layout-container flex h-full grow flex-col w-full">
-            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-4 sm:px-10 py-3">
+            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 bg-white px-10 py-3">
                 <a href="#" class="flex items-center gap-4 text-gray-800 nav-link" data-target="main-page">
                     <div class="size-8 text-[var(--primary-color)]">
                         <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M4 8L24 4L44 8L24 12L4 8Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 24L24 20L44 24L24 28L4 24Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path><path d="M4 40L24 36L44 40L24 44L4 40Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path></svg>
@@ -3369,7 +3390,7 @@
                     </button>
                 </div>
             </header>
-            <main class="flex-1 px-4 sm:px-10 py-8 bg-gray-50">
+            <main class="flex-1 px-10 py-8 bg-gray-50">
                 <div class="layout-content-container mx-auto flex max-w-4xl flex-col gap-8">
                     <div class="flex justify-between items-center">
                         <div class="flex flex-col gap-2">
@@ -3455,32 +3476,30 @@
 
   <script type="module" src="fluxo-de-caixa.js"></script>
   <script type="module" src="movimentacao-bancaria.js"></script>
-  <div id="mobile-menu-backdrop" class="hidden lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"></div>
-  <div id="mobile-menu" class="hidden lg:hidden fixed top-0 left-0 h-full w-64 bg-white shadow-lg z-50 transform -translate-x-full transition-transform duration-300 ease-in-out">
-      <div class="flex justify-between items-center p-4 border-b">
-        <h2 class="text-lg font-semibold">Menu</h2>
-          <button id="close-mobile-menu" class="p-2 rounded-md text-gray-600">
+  <div id="mobile-menu" class="hidden lg:hidden fixed inset-0 bg-gray-800 bg-opacity-75 z-50">
+      <div class="flex justify-end p-4">
+          <button id="close-mobile-menu" class="p-2 rounded-md text-white">
               <span class="material-symbols-outlined">close</span>
           </button>
       </div>
-      <nav class="flex flex-col gap-4 p-4">
-          <a class="nav-link text-gray-700 hover:bg-gray-100 p-2 rounded-md" href="#" data-target="main-page">Painel</a>
-          <a class="nav-link text-gray-700 hover:bg-gray-100 p-2 rounded-md" href="#" data-target="cadastros-page">Cadastros</a>
-          <a class="text-gray-700 hover:bg-gray-100 p-2 rounded-md" href="#">Compras</a>
-          <div>
-              <button id="financeiro-nav-link-mobile" class="w-full text-left text-gray-700 hover:bg-gray-100 p-2 rounded-md flex justify-between items-center">
+      <nav class="flex flex-col items-center gap-8 p-8">
+          <a class="nav-link text-white text-lg font-medium" href="#" data-target="main-page">Painel</a>
+          <a class="nav-link text-white text-lg font-medium" href="#" data-target="cadastros-page">Cadastros</a>
+          <a class="text-white text-lg font-medium" href="#">Compras</a>
+          <div class="relative">
+              <button id="financeiro-nav-link-mobile" class="text-white text-lg font-medium flex items-center gap-1">
                   <span>Financeiro</span>
-                  <span class="material-symbols-outlined text-base transition-transform duration-300">expand_more</span>
+                  <span class="material-symbols-outlined text-base">expand_more</span>
               </button>
-              <div id="financeiro-dropdown-mobile" class="hidden mt-2 space-y-2 pl-4">
-                  <a href="#" class="nav-link block text-sm text-gray-600 hover:bg-gray-100 p-2 rounded-md" data-target="contas-a-pagar-page">Contas a Pagar</a>
-                  <a href="#" class="nav-link block text-sm text-gray-600 hover:bg-gray-100 p-2 rounded-md" data-target="contas-a-receber-page">Contas a Receber</a>
-                  <a href="#" class="nav-link block text-sm text-gray-600 hover:bg-gray-100 p-2 rounded-md" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
-                  <a href="#" class="nav-link block text-sm text-gray-600 hover:bg-gray-100 p-2 rounded-md" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
-                  <a href="#" class="nav-link block text-sm text-gray-600 hover:bg-gray-100 p-2 rounded-md" data-target="relatorios-page">Relatórios</a>
+              <div id="financeiro-dropdown-mobile" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                  <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
+                  <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
+                  <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
+                  <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                  <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
               </div>
           </div>
-          <a class="text-gray-700 hover:bg-gray-100 p-2 rounded-md" href="#">Vendas</a>
+          <a class="text-white text-lg font-medium" href="#">Vendas</a>
       </nav>
   </div>
   <script type="module" src="relatorios.js"></script>
@@ -9003,60 +9022,34 @@ function validateParcelasSum() {
         calendarioViewBtn.addEventListener('click', () => setContasView('calendario'));
     }
 
-        const mobileMenuBackdrop = document.getElementById('mobile-menu-backdrop');
-
-        function openMobileMenu() {
-            mobileMenu.classList.remove('hidden');
-            mobileMenuBackdrop.classList.remove('hidden');
-            // We need a slight delay to allow the elements to be in the DOM before adding the transition classes
-            setTimeout(() => {
-                mobileMenu.classList.remove('-translate-x-full');
-            }, 10);
+        if(mobileMenuButton) {
+            mobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.remove('hidden');
+            });
         }
-
-        function closeMobileMenu() {
-            mobileMenu.classList.add('-translate-x-full');
-            setTimeout(() => {
-                mobileMenu.classList.add('hidden');
-                mobileMenuBackdrop.classList.add('hidden');
-                // Also close the finance dropdown if it's open
-                if (!financeiroDropdownMobile.classList.contains('hidden')) {
-                    financeiroDropdownMobile.classList.add('hidden');
-                    financeiroNavLinkMobile.querySelector('span.material-symbols-outlined').classList.remove('rotate-180');
-                }
-            }, 300); // This duration should match the transition duration
-        }
-
 
         if(closeMobileMenuButton) {
-            closeMobileMenuButton.addEventListener('click', closeMobileMenu);
+            closeMobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.add('hidden');
+            });
         }
-        if(mobileMenuBackdrop) {
-            mobileMenuBackdrop.addEventListener('click', closeMobileMenu);
-        }
-
 
         if(financeiroNavLinkMobile) {
             financeiroNavLinkMobile.addEventListener('click', (e) => {
                 e.stopPropagation();
                 financeiroDropdownMobile.classList.toggle('hidden');
-                e.currentTarget.querySelector('span.material-symbols-outlined').classList.toggle('rotate-180');
             });
         }
 
-        // Close menu when a nav link is clicked
-        mobileMenu.querySelectorAll('.nav-link').forEach(link => {
-            link.addEventListener('click', () => {
-                // We add a small delay to let the navigation happen before the menu closes
-                setTimeout(closeMobileMenu, 150);
-            });
+        window.addEventListener('click', () => {
+            if(financeiroDropdownMobile && !financeiroDropdownMobile.classList.contains('hidden')) {
+                financeiroDropdownMobile.classList.add('hidden');
+            }
         });
 
-
         document.querySelectorAll('[id^="mobile-menu-button"]').forEach(button => {
-            button.addEventListener('click', (e) => {
-                e.stopPropagation();
-                openMobileMenu();
+            button.addEventListener('click', () => {
+                mobileMenu.classList.remove('hidden');
             });
         });
 
