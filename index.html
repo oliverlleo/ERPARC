@@ -100,6 +100,15 @@
         color: #6b7280;
         margin-top: 0.25rem;
     }
+
+    @media (max-width: 1024px) {
+        .lg\\:hidden {
+            display: block;
+        }
+        .hidden.lg\\:flex {
+            display: none;
+        }
+    }
   </style>
 </head>
 
@@ -204,7 +213,7 @@
                     </div>
                     <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                 </a>
-                <nav class="flex items-center gap-8">
+                <nav class="hidden lg:flex items-center gap-8">
                     <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
                     <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
@@ -223,7 +232,7 @@
                     </div>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
-                 <div class="flex items-center gap-4">
+                 <div class="hidden lg:flex items-center gap-4">
                     <button id="notification-bell-main" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
                         <span class="material-symbols-outlined text-gray-600">notifications</span>
                         <span id="notification-indicator-main" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
@@ -238,6 +247,11 @@
                             <a href="#" id="logout-button" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
                         </div>
                     </div>
+                </div>
+                <div class="lg:hidden">
+                    <button id="mobile-menu-button" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
+                        <span class="material-symbols-outlined">menu</span>
+                    </button>
                 </div>
             </header>
             <main class="flex-1 px-10 py-8">
@@ -425,7 +439,7 @@
                     </div>
                     <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                 </a>
-                <nav class="flex items-center gap-8">
+                <nav class="hidden lg:flex items-center gap-8">
                     <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
                     <a class="nav-link text-[var(--primary-color)] text-sm font-medium leading-normal" href="#" data-target="cadastros-page">Cadastros</a>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
@@ -444,7 +458,7 @@
                     </div>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
-                 <div class="flex items-center gap-4">
+                 <div class="hidden lg:flex items-center gap-4">
                     <button id="notification-bell-cadastros" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
                         <span class="material-symbols-outlined text-gray-600">notifications</span>
                         <span id="notification-indicator-cadastros" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
@@ -459,6 +473,11 @@
                             <a href="#" id="logout-button-cadastros" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
                         </div>
                     </div>
+                </div>
+                <div class="lg:hidden">
+                    <button id="mobile-menu-button-cadastros" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
+                        <span class="material-symbols-outlined">menu</span>
+                    </button>
                 </div>
             </header>
             <main class="flex-1 px-10 py-8">
@@ -1275,7 +1294,7 @@
                     </div>
                     <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                 </a>
-                <nav class="flex items-center gap-8">
+                <nav class="hidden lg:flex items-center gap-8">
                     <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
                     <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
@@ -1294,7 +1313,7 @@
                     </div>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
-                 <div class="flex items-center gap-4">
+                 <div class="hidden lg:flex items-center gap-4">
                     <button id="notification-bell-contas" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
                         <span class="material-symbols-outlined text-gray-600">notifications</span>
                         <span id="notification-indicator-contas" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
@@ -1309,6 +1328,11 @@
                             <a href="#" id="logout-button-contas" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
                         </div>
                     </div>
+                </div>
+                <div class="lg:hidden">
+                    <button id="mobile-menu-button-contas" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
+                        <span class="material-symbols-outlined">menu</span>
+                    </button>
                 </div>
             </header>
             <main class="flex-1 px-10 py-8 bg-gray-50">
@@ -1816,7 +1840,7 @@
                     </div>
                     <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                 </a>
-                <nav class="flex items-center gap-8">
+                <nav class="hidden lg:flex items-center gap-8">
                     <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
                     <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
@@ -1835,7 +1859,7 @@
                     </div>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
-                 <div class="flex items-center gap-4">
+                 <div class="hidden lg:flex items-center gap-4">
                     <button id="notification-bell-receber" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
                         <span class="material-symbols-outlined text-gray-600">notifications</span>
                         <span id="notification-indicator-receber" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
@@ -1850,6 +1874,11 @@
                             <a href="#" id="logout-button-receber" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
                         </div>
                     </div>
+                </div>
+                <div class="lg:hidden">
+                    <button id="mobile-menu-button-receber" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
+                        <span class="material-symbols-outlined">menu</span>
+                    </button>
                 </div>
             </header>
             <main class="flex-1 px-10 py-8 bg-gray-50">
@@ -2373,7 +2402,7 @@
                     </div>
                     <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                 </a>
-                <nav class="flex items-center gap-8">
+                <nav class="hidden lg:flex items-center gap-8">
                     <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
                     <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
@@ -2392,7 +2421,7 @@
                     </div>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
-                 <div class="flex items-center gap-4">
+                 <div class="hidden lg:flex items-center gap-4">
                     <button id="notification-bell-fluxo" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
                         <span class="material-symbols-outlined text-gray-600">notifications</span>
                         <span id="notification-indicator-fluxo" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
@@ -2407,6 +2436,11 @@
                             <a href="#" id="logout-button-fluxo" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
                         </div>
                     </div>
+                </div>
+                <div class="lg:hidden">
+                    <button id="mobile-menu-button-fluxo" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
+                        <span class="material-symbols-outlined">menu</span>
+                    </button>
                 </div>
             </header>
             <main class="flex-1 px-10 py-8 bg-gray-50">
@@ -2865,41 +2899,46 @@
                         </div>
                         <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                     </a>
-                    <nav class="flex items-center gap-8">
-                        <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
-                        <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
-                        <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
-                        <div class="relative">
-                            <button id="financeiro-nav-link-relatorios" class="text-[var(--primary-color)] text-sm font-medium leading-normal flex items-center gap-1">
-                                <span>Financeiro</span>
-                                <span class="material-symbols-outlined text-base">expand_more</span>
-                            </button>
-                            <div id="financeiro-dropdown-relatorios" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
-                                <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
-                                <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
-                                <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
-                                <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
-                                <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
-                            </div>
-                        </div>
-                        <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
-                    </nav>
-                     <div class="flex items-center gap-4">
-                        <button id="notification-bell-relatorios" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                            <span class="material-symbols-outlined text-gray-600">notifications</span>
-                            <span id="notification-indicator-relatorios" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                <nav class="hidden lg:flex items-center gap-8">
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
+                    <div class="relative">
+                        <button id="financeiro-nav-link-relatorios" class="text-[var(--primary-color)] text-sm font-medium leading-normal flex items-center gap-1">
+                            <span>Financeiro</span>
+                            <span class="material-symbols-outlined text-base">expand_more</span>
                         </button>
-                        <div class="relative">
-                            <button id="profile-button-relatorios" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
-                            <div id="profile-dropdown-relatorios" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                                <div class="px-4 py-2 text-sm text-gray-700 border-b">
-                                    <p class="font-medium">Logado como:</p>
-                                    <p id="user-email-relatorios" class="truncate"></p>
-                                </div>
-                                <a href="#" id="logout-button-relatorios" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
-                            </div>
+                        <div id="financeiro-dropdown-relatorios" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
                         </div>
                     </div>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
+                </nav>
+                 <div class="hidden lg:flex items-center gap-4">
+                    <button id="notification-bell-relatorios" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-relatorios" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                    </button>
+                    <div class="relative">
+                        <button id="profile-button-relatorios" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
+                        <div id="profile-dropdown-relatorios" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                            <div class="px-4 py-2 text-sm text-gray-700 border-b">
+                                <p class="font-medium">Logado como:</p>
+                                <p id="user-email-relatorios" class="truncate"></p>
+                            </div>
+                            <a href="#" id="logout-button-relatorios" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="lg:hidden">
+                    <button id="mobile-menu-button-relatorios" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
+                        <span class="material-symbols-outlined">menu</span>
+                    </button>
+                </div>
                 </header>
                 <main class="flex-1 px-10 py-8 bg-gray-50">
                     <div class="layout-content-container mx-auto flex max-w-7xl flex-col gap-8">
@@ -3087,7 +3126,7 @@
                     </div>
                     <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                 </a>
-                <nav class="flex items-center gap-8">
+                <nav class="hidden lg:flex items-center gap-8">
                     <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
                     <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
@@ -3105,7 +3144,7 @@
                     </div>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
-                 <div class="flex items-center gap-4">
+                 <div class="hidden lg:flex items-center gap-4">
                     <button id="notification-bell-movimentacao" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
                         <span class="material-symbols-outlined text-gray-600">notifications</span>
                         <span id="notification-indicator-movimentacao" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
@@ -3120,6 +3159,11 @@
                             <a href="#" id="logout-button-movimentacao" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
                         </div>
                     </div>
+                </div>
+                <div class="lg:hidden">
+                    <button id="mobile-menu-button-movimentacao" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
+                        <span class="material-symbols-outlined">menu</span>
+                    </button>
                 </div>
             </header>
             <main class="flex-1 px-10 py-8 bg-gray-50">
@@ -3285,7 +3329,7 @@
                     </div>
                     <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                 </a>
-                <nav class="flex items-center gap-8">
+                <nav class="hidden lg:flex items-center gap-8">
                     <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
                     <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
@@ -3303,7 +3347,7 @@
                     </div>
                     <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
                 </nav>
-                 <div class="flex items-center gap-4">
+                 <div class="hidden lg:flex items-center gap-4">
                     <button id="notification-bell-notifications" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
                         <span class="material-symbols-outlined text-gray-600">notifications</span>
                         <span id="notification-indicator-notifications" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
@@ -3318,6 +3362,11 @@
                             <a href="#" id="logout-button-notifications" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
                         </div>
                     </div>
+                </div>
+                <div class="lg:hidden">
+                    <button id="mobile-menu-button-notifications" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
+                        <span class="material-symbols-outlined">menu</span>
+                    </button>
                 </div>
             </header>
             <main class="flex-1 px-10 py-8 bg-gray-50">
@@ -3406,6 +3455,32 @@
 
   <script type="module" src="fluxo-de-caixa.js"></script>
   <script type="module" src="movimentacao-bancaria.js"></script>
+  <div id="mobile-menu" class="hidden lg:hidden fixed inset-0 bg-gray-800 bg-opacity-75 z-50">
+      <div class="flex justify-end p-4">
+          <button id="close-mobile-menu" class="p-2 rounded-md text-white">
+              <span class="material-symbols-outlined">close</span>
+          </button>
+      </div>
+      <nav class="flex flex-col items-center gap-8 p-8">
+          <a class="nav-link text-white text-lg font-medium" href="#" data-target="main-page">Painel</a>
+          <a class="nav-link text-white text-lg font-medium" href="#" data-target="cadastros-page">Cadastros</a>
+          <a class="text-white text-lg font-medium" href="#">Compras</a>
+          <div class="relative">
+              <button id="financeiro-nav-link-mobile" class="text-white text-lg font-medium flex items-center gap-1">
+                  <span>Financeiro</span>
+                  <span class="material-symbols-outlined text-base">expand_more</span>
+              </button>
+              <div id="financeiro-dropdown-mobile" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                  <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
+                  <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
+                  <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
+                  <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                  <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
+              </div>
+          </div>
+          <a class="text-white text-lg font-medium" href="#">Vendas</a>
+      </nav>
+  </div>
   <script type="module" src="relatorios.js"></script>
   <script type="module">
     // Importações do Firebase SDK
@@ -3557,6 +3632,11 @@
     const financeiroDropdownNotifications = document.getElementById('financeiro-dropdown-notifications');
     const financeiroNavLinkRelatorios = document.getElementById('financeiro-nav-link-relatorios');
     const financeiroDropdownRelatorios = document.getElementById('financeiro-dropdown-relatorios');
+    const mobileMenuButton = document.getElementById('mobile-menu-button');
+    const mobileMenu = document.getElementById('mobile-menu');
+    const closeMobileMenuButton = document.getElementById('close-mobile-menu');
+    const financeiroNavLinkMobile = document.getElementById('financeiro-nav-link-mobile');
+    const financeiroDropdownMobile = document.getElementById('financeiro-dropdown-mobile');
 
     // --- Elementos de Notificação ---
     const notificationSidebar = document.getElementById('notification-sidebar');
@@ -8920,6 +9000,37 @@ function validateParcelasSum() {
     if(calendarioViewBtn) {
         calendarioViewBtn.addEventListener('click', () => setContasView('calendario'));
     }
+
+        if(mobileMenuButton) {
+            mobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.remove('hidden');
+            });
+        }
+
+        if(closeMobileMenuButton) {
+            closeMobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.add('hidden');
+            });
+        }
+
+        if(financeiroNavLinkMobile) {
+            financeiroNavLinkMobile.addEventListener('click', (e) => {
+                e.stopPropagation();
+                financeiroDropdownMobile.classList.toggle('hidden');
+            });
+        }
+
+        window.addEventListener('click', () => {
+            if(financeiroDropdownMobile && !financeiroDropdownMobile.classList.contains('hidden')) {
+                financeiroDropdownMobile.classList.add('hidden');
+            }
+        });
+
+        document.querySelectorAll('[id^="mobile-menu-button"]').forEach(button => {
+            button.addEventListener('click', () => {
+                mobileMenu.classList.remove('hidden');
+            });
+        });
 
     function renderReceitasTable(docs) {
         if (!receitasTableBody) return;
