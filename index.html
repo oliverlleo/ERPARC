@@ -213,42 +213,40 @@
                     </div>
                     <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                 </a>
-                <div class="hidden lg:flex items-center gap-4">
-                  <nav class="flex items-center gap-8">
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
-                      <div class="relative">
-                          <button id="financeiro-nav-link" class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors flex items-center gap-1">
-                              <span>Financeiro</span>
-                              <span class="material-symbols-outlined text-base">expand_more</span>
-                          </button>
-                          <div id="financeiro-dropdown" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
-                          </div>
-                      </div>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
-                  </nav>
-                   <div class="flex items-center gap-4">
-                      <button id="notification-bell-main" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                          <span class="material-symbols-outlined text-gray-600">notifications</span>
-                          <span id="notification-indicator-main" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-                      </button>
-                      <div class="relative">
-                          <button id="profile-button" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
-                          <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                              <div class="px-4 py-2 text-sm text-gray-700 border-b">
-                                  <p class="font-medium">Logado como:</p>
-                                  <p id="user-email" class="truncate"></p>
-                              </div>
-                              <a href="#" id="logout-button" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
-                          </div>
-                      </div>
-                  </div>
+                <nav class="hidden lg:flex items-center gap-8">
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
+                    <div class="relative">
+                        <button id="financeiro-nav-link" class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors flex items-center gap-1">
+                            <span>Financeiro</span>
+                            <span class="material-symbols-outlined text-base">expand_more</span>
+                        </button>
+                        <div id="financeiro-dropdown" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
+                        </div>
+                    </div>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
+                </nav>
+                 <div class="hidden lg:flex items-center gap-4">
+                    <button id="notification-bell-main" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-main" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                    </button>
+                    <div class="relative">
+                        <button id="profile-button" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
+                        <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                            <div class="px-4 py-2 text-sm text-gray-700 border-b">
+                                <p class="font-medium">Logado como:</p>
+                                <p id="user-email" class="truncate"></p>
+                            </div>
+                            <a href="#" id="logout-button" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
+                        </div>
+                    </div>
                 </div>
                 <div class="lg:hidden">
                     <button id="mobile-menu-button" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
@@ -441,42 +439,40 @@
                     </div>
                     <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                 </a>
-                <div class="hidden lg:flex items-center gap-4">
-                  <nav class="flex items-center gap-8">
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
-                      <a class="nav-link text-[var(--primary-color)] text-sm font-medium leading-normal" href="#" data-target="cadastros-page">Cadastros</a>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
-                      <div class="relative">
-                          <button id="financeiro-nav-link-cadastros" class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors flex items-center gap-1">
-                              <span>Financeiro</span>
-                              <span class="material-symbols-outlined text-base">expand_more</span>
-                          </button>
-                          <div id="financeiro-dropdown-cadastros" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
-                          </div>
-                      </div>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
-                  </nav>
-                   <div class="flex items-center gap-4">
-                      <button id="notification-bell-cadastros" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                          <span class="material-symbols-outlined text-gray-600">notifications</span>
-                          <span id="notification-indicator-cadastros" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-                      </button>
-                      <div class="relative">
-                          <button id="profile-button-cadastros" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
-                          <div id="profile-dropdown-cadastros" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                              <div class="px-4 py-2 text-sm text-gray-700 border-b">
-                                  <p class="font-medium">Logado como:</p>
-                                  <p id="user-email-cadastros" class="truncate"></p>
-                              </div>
-                              <a href="#" id="logout-button-cadastros" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
-                          </div>
-                      </div>
-                  </div>
+                <nav class="hidden lg:flex items-center gap-8">
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
+                    <a class="nav-link text-[var(--primary-color)] text-sm font-medium leading-normal" href="#" data-target="cadastros-page">Cadastros</a>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
+                    <div class="relative">
+                        <button id="financeiro-nav-link-cadastros" class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors flex items-center gap-1">
+                            <span>Financeiro</span>
+                            <span class="material-symbols-outlined text-base">expand_more</span>
+                        </button>
+                        <div id="financeiro-dropdown-cadastros" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
+                        </div>
+                    </div>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
+                </nav>
+                 <div class="hidden lg:flex items-center gap-4">
+                    <button id="notification-bell-cadastros" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-cadastros" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                    </button>
+                    <div class="relative">
+                        <button id="profile-button-cadastros" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
+                        <div id="profile-dropdown-cadastros" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                            <div class="px-4 py-2 text-sm text-gray-700 border-b">
+                                <p class="font-medium">Logado como:</p>
+                                <p id="user-email-cadastros" class="truncate"></p>
+                            </div>
+                            <a href="#" id="logout-button-cadastros" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
+                        </div>
+                    </div>
                 </div>
                 <div class="lg:hidden">
                     <button id="mobile-menu-button-cadastros" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
@@ -1298,42 +1294,40 @@
                     </div>
                     <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                 </a>
-                <div class="hidden lg:flex items-center gap-4">
-                  <nav class="flex items-center gap-8">
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
-                      <div class="relative">
-                          <button id="financeiro-nav-link-contas" class="text-[var(--primary-color)] text-sm font-medium leading-normal flex items-center gap-1">
-                              <span>Financeiro</span>
-                              <span class="material-symbols-outlined text-base">expand_more</span>
-                          </button>
-                          <div id="financeiro-dropdown-contas" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
-                          </div>
-                      </div>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
-                  </nav>
-                   <div class="flex items-center gap-4">
-                      <button id="notification-bell-contas" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                          <span class="material-symbols-outlined text-gray-600">notifications</span>
-                          <span id="notification-indicator-contas" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-                      </button>
-                      <div class="relative">
-                          <button id="profile-button-contas" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
-                          <div id="profile-dropdown-contas" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                              <div class="px-4 py-2 text-sm text-gray-700 border-b">
-                                  <p class="font-medium">Logado como:</p>
-                                  <p id="user-email-contas" class="truncate"></p>
-                              </div>
-                              <a href="#" id="logout-button-contas" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
-                          </div>
-                      </div>
-                  </div>
+                <nav class="hidden lg:flex items-center gap-8">
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
+                    <div class="relative">
+                        <button id="financeiro-nav-link-contas" class="text-[var(--primary-color)] text-sm font-medium leading-normal flex items-center gap-1">
+                            <span>Financeiro</span>
+                            <span class="material-symbols-outlined text-base">expand_more</span>
+                        </button>
+                        <div id="financeiro-dropdown-contas" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
+                        </div>
+                    </div>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
+                </nav>
+                 <div class="hidden lg:flex items-center gap-4">
+                    <button id="notification-bell-contas" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-contas" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                    </button>
+                    <div class="relative">
+                        <button id="profile-button-contas" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
+                        <div id="profile-dropdown-contas" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                            <div class="px-4 py-2 text-sm text-gray-700 border-b">
+                                <p class="font-medium">Logado como:</p>
+                                <p id="user-email-contas" class="truncate"></p>
+                            </div>
+                            <a href="#" id="logout-button-contas" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
+                        </div>
+                    </div>
                 </div>
                 <div class="lg:hidden">
                     <button id="mobile-menu-button-contas" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
@@ -1846,42 +1840,40 @@
                     </div>
                     <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                 </a>
-                <div class="hidden lg:flex items-center gap-4">
-                  <nav class="flex items-center gap-8">
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
-                      <div class="relative">
-                          <button id="financeiro-nav-link-receber" class="text-[var(--primary-color)] text-sm font-medium leading-normal flex items-center gap-1">
-                              <span>Financeiro</span>
-                              <span class="material-symbols-outlined text-base">expand_more</span>
-                          </button>
-                          <div id="financeiro-dropdown-receber" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
-                               <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
-                          </div>
-                      </div>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
-                  </nav>
-                   <div class="flex items-center gap-4">
-                      <button id="notification-bell-receber" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                          <span class="material-symbols-outlined text-gray-600">notifications</span>
-                          <span id="notification-indicator-receber" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-                      </button>
-                      <div class="relative">
-                          <button id="profile-button-receber" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
-                          <div id="profile-dropdown-receber" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                              <div class="px-4 py-2 text-sm text-gray-700 border-b">
-                                  <p class="font-medium">Logado como:</p>
-                                  <p id="user-email-receber" class="truncate"></p>
-                              </div>
-                              <a href="#" id="logout-button-receber" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
-                          </div>
-                      </div>
-                  </div>
+                <nav class="hidden lg:flex items-center gap-8">
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
+                    <div class="relative">
+                        <button id="financeiro-nav-link-receber" class="text-[var(--primary-color)] text-sm font-medium leading-normal flex items-center gap-1">
+                            <span>Financeiro</span>
+                            <span class="material-symbols-outlined text-base">expand_more</span>
+                        </button>
+                        <div id="financeiro-dropdown-receber" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
+                             <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
+                        </div>
+                    </div>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
+                </nav>
+                 <div class="hidden lg:flex items-center gap-4">
+                    <button id="notification-bell-receber" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-receber" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                    </button>
+                    <div class="relative">
+                        <button id="profile-button-receber" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
+                        <div id="profile-dropdown-receber" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                            <div class="px-4 py-2 text-sm text-gray-700 border-b">
+                                <p class="font-medium">Logado como:</p>
+                                <p id="user-email-receber" class="truncate"></p>
+                            </div>
+                            <a href="#" id="logout-button-receber" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
+                        </div>
+                    </div>
                 </div>
                 <div class="lg:hidden">
                     <button id="mobile-menu-button-receber" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
@@ -2410,42 +2402,40 @@
                     </div>
                     <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                 </a>
-                <div class="hidden lg:flex items-center gap-4">
-                  <nav class="flex items-center gap-8">
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
-                      <div class="relative">
-                          <button id="financeiro-nav-link-fluxo" class="text-[var(--primary-color)] text-sm font-medium leading-normal flex items-center gap-1">
-                              <span>Financeiro</span>
-                              <span class="material-symbols-outlined text-base">expand_more</span>
-                          </button>
-                          <div id="financeiro-dropdown-fluxo" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
-                          </div>
-                      </div>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
-                  </nav>
-                   <div class="flex items-center gap-4">
-                      <button id="notification-bell-fluxo" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                          <span class="material-symbols-outlined text-gray-600">notifications</span>
-                          <span id="notification-indicator-fluxo" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-                      </button>
-                      <div class="relative">
-                          <button id="profile-button-fluxo" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
-                          <div id="profile-dropdown-fluxo" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                              <div class="px-4 py-2 text-sm text-gray-700 border-b">
-                                  <p class="font-medium">Logado como:</p>
-                                  <p id="user-email-fluxo" class="truncate"></p>
-                              </div>
-                              <a href="#" id="logout-button-fluxo" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
-                          </div>
-                      </div>
-                  </div>
+                <nav class="hidden lg:flex items-center gap-8">
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
+                    <div class="relative">
+                        <button id="financeiro-nav-link-fluxo" class="text-[var(--primary-color)] text-sm font-medium leading-normal flex items-center gap-1">
+                            <span>Financeiro</span>
+                            <span class="material-symbols-outlined text-base">expand_more</span>
+                        </button>
+                        <div id="financeiro-dropdown-fluxo" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
+                        </div>
+                    </div>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
+                </nav>
+                 <div class="hidden lg:flex items-center gap-4">
+                    <button id="notification-bell-fluxo" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-fluxo" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                    </button>
+                    <div class="relative">
+                        <button id="profile-button-fluxo" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
+                        <div id="profile-dropdown-fluxo" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                            <div class="px-4 py-2 text-sm text-gray-700 border-b">
+                                <p class="font-medium">Logado como:</p>
+                                <p id="user-email-fluxo" class="truncate"></p>
+                            </div>
+                            <a href="#" id="logout-button-fluxo" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
+                        </div>
+                    </div>
                 </div>
                 <div class="lg:hidden">
                     <button id="mobile-menu-button-fluxo" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
@@ -2909,42 +2899,40 @@
                         </div>
                         <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                     </a>
-                <div class="hidden lg:flex items-center gap-4">
-                  <nav class="flex items-center gap-8">
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
-                      <div class="relative">
-                          <button id="financeiro-nav-link-relatorios" class="text-[var(--primary-color)] text-sm font-medium leading-normal flex items-center gap-1">
-                              <span>Financeiro</span>
-                              <span class="material-symbols-outlined text-base">expand_more</span>
-                          </button>
-                          <div id="financeiro-dropdown-relatorios" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
-                          </div>
-                      </div>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
-                  </nav>
-                   <div class="flex items-center gap-4">
-                      <button id="notification-bell-relatorios" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                          <span class="material-symbols-outlined text-gray-600">notifications</span>
-                          <span id="notification-indicator-relatorios" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-                      </button>
-                      <div class="relative">
-                          <button id="profile-button-relatorios" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
-                          <div id="profile-dropdown-relatorios" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                              <div class="px-4 py-2 text-sm text-gray-700 border-b">
-                                  <p class="font-medium">Logado como:</p>
-                                  <p id="user-email-relatorios" class="truncate"></p>
-                              </div>
-                              <a href="#" id="logout-button-relatorios" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
-                          </div>
-                      </div>
-                  </div>
+                <nav class="hidden lg:flex items-center gap-8">
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
+                    <div class="relative">
+                        <button id="financeiro-nav-link-relatorios" class="text-[var(--primary-color)] text-sm font-medium leading-normal flex items-center gap-1">
+                            <span>Financeiro</span>
+                            <span class="material-symbols-outlined text-base">expand_more</span>
+                        </button>
+                        <div id="financeiro-dropdown-relatorios" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="relatorios-page">Relatórios</a>
+                        </div>
+                    </div>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
+                </nav>
+                 <div class="hidden lg:flex items-center gap-4">
+                    <button id="notification-bell-relatorios" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-relatorios" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                    </button>
+                    <div class="relative">
+                        <button id="profile-button-relatorios" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
+                        <div id="profile-dropdown-relatorios" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                            <div class="px-4 py-2 text-sm text-gray-700 border-b">
+                                <p class="font-medium">Logado como:</p>
+                                <p id="user-email-relatorios" class="truncate"></p>
+                            </div>
+                            <a href="#" id="logout-button-relatorios" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
+                        </div>
+                    </div>
                 </div>
                 <div class="lg:hidden">
                     <button id="mobile-menu-button-relatorios" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
@@ -3138,41 +3126,39 @@
                     </div>
                     <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                 </a>
-                <div class="hidden lg:flex items-center gap-4">
-                  <nav class="flex items-center gap-8">
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
-                      <div class="relative">
-                          <button id="financeiro-nav-link-movimentacao" class="text-[var(--primary-color)] text-sm font-medium leading-normal flex items-center gap-1">
-                              <span>Financeiro</span>
-                              <span class="material-symbols-outlined text-base">expand_more</span>
-                          </button>
-                          <div id="financeiro-dropdown-movimentacao" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
-                          </div>
-                      </div>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
-                  </nav>
-                   <div class="flex items-center gap-4">
-                      <button id="notification-bell-movimentacao" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                          <span class="material-symbols-outlined text-gray-600">notifications</span>
-                          <span id="notification-indicator-movimentacao" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-                      </button>
-                      <div class="relative">
-                          <button id="profile-button-movimentacao" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
-                          <div id="profile-dropdown-movimentacao" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                              <div class="px-4 py-2 text-sm text-gray-700 border-b">
-                                  <p class="font-medium">Logado como:</p>
-                                  <p id="user-email-movimentacao" class="truncate"></p>
-                              </div>
-                              <a href="#" id="logout-button-movimentacao" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
-                          </div>
-                      </div>
-                  </div>
+                <nav class="hidden lg:flex items-center gap-8">
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
+                    <div class="relative">
+                        <button id="financeiro-nav-link-movimentacao" class="text-[var(--primary-color)] text-sm font-medium leading-normal flex items-center gap-1">
+                            <span>Financeiro</span>
+                            <span class="material-symbols-outlined text-base">expand_more</span>
+                        </button>
+                        <div id="financeiro-dropdown-movimentacao" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                        </div>
+                    </div>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
+                </nav>
+                 <div class="hidden lg:flex items-center gap-4">
+                    <button id="notification-bell-movimentacao" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-movimentacao" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                    </button>
+                    <div class="relative">
+                        <button id="profile-button-movimentacao" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
+                        <div id="profile-dropdown-movimentacao" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                            <div class="px-4 py-2 text-sm text-gray-700 border-b">
+                                <p class="font-medium">Logado como:</p>
+                                <p id="user-email-movimentacao" class="truncate"></p>
+                            </div>
+                            <a href="#" id="logout-button-movimentacao" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
+                        </div>
+                    </div>
                 </div>
                 <div class="lg:hidden">
                     <button id="mobile-menu-button-movimentacao" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
@@ -3343,41 +3329,39 @@
                     </div>
                     <h2 class="text-gray-800 text-lg font-semibold leading-tight tracking-[-0.015em]">ArchSys</h2>
                 </a>
-                <div class="hidden lg:flex items-center gap-4">
-                  <nav class="flex items-center gap-8">
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
-                      <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
-                      <div class="relative">
-                          <button id="financeiro-nav-link-notifications" class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors flex items-center gap-1">
-                              <span>Financeiro</span>
-                              <span class="material-symbols-outlined text-base">expand_more</span>
-                          </button>
-                          <div id="financeiro-dropdown-notifications" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
-                              <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
-                          </div>
-                      </div>
-                      <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
-                  </nav>
-                   <div class="flex items-center gap-4">
-                      <button id="notification-bell-notifications" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
-                          <span class="material-symbols-outlined text-gray-600">notifications</span>
-                          <span id="notification-indicator-notifications" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-                      </button>
-                      <div class="relative">
-                          <button id="profile-button-notifications" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
-                          <div id="profile-dropdown-notifications" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                              <div class="px-4 py-2 text-sm text-gray-700 border-b">
-                                  <p class="font-medium">Logado como:</p>
-                                  <p id="user-email-notifications" class="truncate"></p>
-                              </div>
-                              <a href="#" id="logout-button-notifications" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
-                          </div>
-                      </div>
-                  </div>
+                <nav class="hidden lg:flex items-center gap-8">
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="main-page">Painel</a>
+                    <a class="nav-link text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#" data-target="cadastros-page">Cadastros</a>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Compras</a>
+                    <div class="relative">
+                        <button id="financeiro-nav-link-notifications" class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors flex items-center gap-1">
+                            <span>Financeiro</span>
+                            <span class="material-symbols-outlined text-base">expand_more</span>
+                        </button>
+                        <div id="financeiro-dropdown-notifications" class="hidden absolute mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-pagar-page">Contas a Pagar</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="contas-a-receber-page">Contas a Receber</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="fluxo-de-caixa-page">Fluxo de Caixa</a>
+                            <a href="#" class="nav-link block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-target="movimentacao-bancaria-page">Conciliação Bancária</a>
+                        </div>
+                    </div>
+                    <a class="text-gray-600 hover:text-[var(--primary-color)] text-sm font-medium leading-normal transition-colors" href="#">Vendas</a>
+                </nav>
+                 <div class="hidden lg:flex items-center gap-4">
+                    <button id="notification-bell-notifications" class="relative rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-color)]">
+                        <span class="material-symbols-outlined text-gray-600">notifications</span>
+                        <span id="notification-indicator-notifications" class="hidden absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                    </button>
+                    <div class="relative">
+                        <button id="profile-button-notifications" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://placehold.co/40x40/E2E8F0/4A5568?text=U");'></button>
+                        <div id="profile-dropdown-notifications" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                            <div class="px-4 py-2 text-sm text-gray-700 border-b">
+                                <p class="font-medium">Logado como:</p>
+                                <p id="user-email-notifications" class="truncate"></p>
+                            </div>
+                            <a href="#" id="logout-button-notifications" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sair</a>
+                        </div>
+                    </div>
                 </div>
                 <div class="lg:hidden">
                     <button id="mobile-menu-button-notifications" class="p-2 rounded-md text-gray-600 hover:text-gray-900">
