@@ -86,6 +86,14 @@
     .notification-icon-danger { background-color: #FEE2E2; color: #EF4444; } /* red-100, red-500 */
     .notification-icon-comment { background-color: #EDE9FE; color: #8B5CF6; } /* violet-100, violet-500 */
 
+    .notification-item.important {
+        background-color: #FEFCE8; /* yellow-50 */
+    }
+
+    .notification-item.important .notification-text {
+        font-weight: 500;
+    }
+
     .notification-content {
         flex-grow: 1;
     }
@@ -136,23 +144,42 @@
 <body class="bg-gray-50">
 
   <!-- Notification Sidebar -->
-  <div id="notification-sidebar" class="fixed top-0 right-0 h-full w-80 bg-white shadow-lg z-50 transform translate-x-full transition-transform duration-300 ease-in-out">
-      <div class="flex justify-between items-center p-4 border-b">
-          <h2 class="text-xl font-semibold">Notificações</h2>
-          <button id="close-notification-sidebar" class="p-2 rounded-full hover:bg-gray-200">
-              <span class="material-symbols-outlined">close</span>
-          </button>
-      </div>
-      <div id="notification-list" class="p-4 space-y-4 overflow-y-auto h-[calc(100%-120px)]">
-          <!-- Notification items will be dynamically inserted here -->
-          <div class="text-center text-gray-500 pt-8">
-              <p>Não há notificações no momento.</p>
-          </div>
-      </div>
-      <div class="absolute bottom-0 left-0 w-full p-4 border-t bg-white">
-          <a href="#" class="nav-link block text-center text-blue-600 hover:underline" data-target="notifications-page">Ver todas as notificações</a>
-      </div>
-  </div>
+  <div id="notification-sidebar" class="fixed top-0 right-0 h-full w-96 bg-white shadow-lg z-50 transform translate-x-full transition-transform duration-300 ease-in-out">
+    <div class="flex justify-between items-center p-4 border-b">
+        <h2 class="text-xl font-semibold">Notificações</h2>
+        <button id="close-notification-sidebar" class="p-2 rounded-full hover:bg-gray-200">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
+
+    <!-- Controls for clearing notifications -->
+    <div class="p-4 border-b bg-gray-50">
+        <button id="clear-notifications-btn" class="w-full inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
+            <span class="material-symbols-outlined mr-2">delete_sweep</span>
+            Limpar Notificações
+        </button>
+        <div class="mt-3 space-y-2 text-sm text-gray-600">
+            <div class="flex items-center">
+                <input id="clear-pinned-checkbox" type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                <label for="clear-pinned-checkbox" class="ml-2">Limpar notificações fixadas no topo</label>
+            </div>
+            <div class="flex items-center">
+                <input id="clear-important-checkbox" type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                <label for="clear-important-checkbox" class="ml-2">Limpar notificações importantes</label>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification-list" class="overflow-y-auto h-[calc(100%-240px)]">
+        <!-- Notification items will be dynamically inserted here -->
+        <div class="text-center text-gray-500 pt-8">
+            <p>Não há notificações no momento.</p>
+        </div>
+    </div>
+    <div class="absolute bottom-0 left-0 w-full p-4 border-t bg-white">
+        <a href="#" class="nav-link block text-center text-blue-600 hover:underline" data-target="notifications-page">Ver todas as notificações</a>
+    </div>
+</div>
 
   <!--
   Tailwind JIT safelist:
