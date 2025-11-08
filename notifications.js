@@ -1,4 +1,4 @@
-import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp, Timestamp, orderBy, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp, Timestamp, orderBy, deleteDoc, writeBatch, updateDoc, doc, onSnapshot, limit } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 
 // --- Notification Generation Logic ---
 
@@ -201,11 +201,174 @@ function checkAllNotifications(db, userId) {
 export function initializeNotifications(db, userId) {
     if (!userId) return;
 
-    // Check notifications on startup
     checkAllNotifications(db, userId);
+    setInterval(() => checkAllNotifications(db, userId), 300000); // Check every 5 minutes
 
-    // Then check every 5 minutes
-    setInterval(() => checkAllNotifications(db, userId), 300000);
+    let sidebarNotifications = [];
+
+    const notificationsQuery = query(
+        collection(db, 'users', userId, 'notifications'),
+        orderBy('createdAt', 'desc'),
+        limit(50)
+    );
+
+    // Use onSnapshot to listen for real-time updates
+    onSnapshot(notificationsQuery, (querySnapshot) => {
+        sidebarNotifications = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderSidebarNotifications(sidebarNotifications, db, userId);
+    });
+
+    const notificationList = document.getElementById('notification-list');
+    const clearButton = document.getElementById('clear-notifications-btn');
+    const clearPinnedCheckbox = document.getElementById('clear-pinned-checkbox');
+    const clearImportantCheckbox = document.getElementById('clear-important-checkbox');
+
+    if (clearButton) {
+        clearButton.addEventListener('click', async () => {
+            const clearPinned = clearPinnedCheckbox.checked;
+            const clearImportant = clearImportantCheckbox.checked;
+            const batch = writeBatch(db);
+            let notificationsToClearCount = 0;
+
+            const visibleNotifications = sidebarNotifications.filter(n => n.clearedFromSidebar !== true);
+
+            visibleNotifications.forEach(notification => {
+                const isPinned = notification.pinned === true;
+                const isImportant = notification.important === true;
+
+                if ((!isPinned || clearPinned) && (!isImportant || clearImportant)) {
+                    const docRef = doc(db, 'users', userId, 'notifications', notification.id);
+                    batch.update(docRef, { clearedFromSidebar: true });
+                    notificationsToClearCount++;
+                }
+            });
+
+            if (notificationsToClearCount > 0) {
+                try {
+                    await batch.commit();
+                } catch (error) {
+                    console.error("Error clearing notifications:", error);
+                }
+            }
+        });
+    }
+
+    if (notificationList) {
+        notificationList.addEventListener('click', async (e) => {
+            const container = e.target.closest('.notification-item-container');
+            if (!container) return;
+
+            const notificationId = container.dataset.id;
+            const notification = sidebarNotifications.find(n => n.id === notificationId);
+            if (!notification) return;
+
+            const notificationRef = doc(db, 'users', userId, 'notifications', notificationId);
+            const pinButton = e.target.closest('.toggle-pin-btn');
+            const importantButton = e.target.closest('.toggle-important-btn');
+            const link = e.target.closest('.notification-item-link');
+
+            if (pinButton) {
+                e.stopPropagation();
+                await updateDoc(notificationRef, { pinned: !notification.pinned });
+            } else if (importantButton) {
+                e.stopPropagation();
+                await updateDoc(notificationRef, { important: !notification.important });
+            } else if (link) {
+                if (!notification.read) {
+                    await updateDoc(notificationRef, { read: true });
+                }
+                // Handle navigation logic if needed
+            }
+        });
+    }
+}
+
+
+function formatTimeAgo(timestamp) {
+    if (!timestamp) return 'agora';
+    const notificationTime = timestamp.toDate();
+    const now = new Date();
+    const seconds = Math.floor((now - notificationTime) / 1000);
+
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + " anos atrás";
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + " meses atrás";
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + " dias atrás";
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + " horas atrás";
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + " minutos atrás";
+    return "agora mesmo";
+}
+
+
+function renderSidebarNotifications(notifications, db, userId) {
+    const notificationList = document.getElementById('notification-list');
+    const notificationIndicators = document.querySelectorAll('[id^="notification-indicator-"]');
+
+    if (!notificationList) return;
+    notificationList.innerHTML = '';
+
+    const visibleNotifications = notifications.filter(notif => notif.clearedFromSidebar !== true);
+
+    if (visibleNotifications.length === 0) {
+        notificationList.innerHTML = `
+            <div class="text-center text-gray-500 pt-8">
+                <span class="material-symbols-outlined text-4xl text-gray-400">notifications_off</span>
+                <p class="mt-2">Não há notificações no momento.</p>
+            </div>`;
+        notificationIndicators.forEach(indicator => indicator.classList.add('hidden'));
+        return;
+    }
+
+    visibleNotifications.sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0);
+    });
+
+    let unreadCount = 0;
+    visibleNotifications.forEach(notification => {
+        if (!notification.read) {
+            unreadCount++;
+        }
+
+        const timeAgo = notification.createdAt ? formatTimeAgo(notification.createdAt) : 'agora';
+        const item = document.createElement('div');
+        item.className = `notification-item-container flex items-center p-2 border-b hover:bg-gray-50 ${notification.important ? 'important' : ''} ${!notification.read ? 'bg-blue-50' : ''}`;
+        item.dataset.id = notification.id;
+
+        item.innerHTML = `
+            <a href="#" class="notification-item-link flex-grow" data-link="${notification.link || '#'}">
+                <div class="flex items-start gap-4">
+                    <div class="notification-icon ${notification.iconClass || 'notification-icon-info'}">
+                        <span class="material-symbols-outlined">${notification.icon || 'notifications'}</span>
+                    </div>
+                    <div class="notification-content">
+                        <p class="notification-text">${notification.message}</p>
+                        <p class="notification-time">${timeAgo}</p>
+                    </div>
+                </div>
+            </a>
+            <div class="flex flex-col items-center justify-start space-y-1 ml-2">
+                <button class="toggle-pin-btn p-1 rounded-full hover:bg-gray-200" title="Fixar no topo">
+                    <span class="material-symbols-outlined text-base ${notification.pinned ? 'text-blue-600' : 'text-gray-500'}">push_pin</span>
+                </button>
+                <button class="toggle-important-btn p-1 rounded-full hover:bg-gray-200" title="Marcar como importante">
+                    <span class="material-symbols-outlined text-base ${notification.important ? 'text-yellow-500' : 'text-gray-500'}">${notification.important ? 'star' : 'star'}</span>
+                </button>
+            </div>
+        `;
+        notificationList.appendChild(item);
+    });
+
+    if (unreadCount > 0) {
+        notificationIndicators.forEach(indicator => indicator.classList.remove('hidden'));
+    } else {
+        notificationIndicators.forEach(indicator => indicator.classList.add('hidden'));
+    }
 }
 
 // --- Full Notification Page Logic ---
