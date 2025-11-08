@@ -3571,7 +3571,7 @@
     // Importações do Firebase SDK
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-    import { getFirestore, doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc, query, where, getDocs, getDoc, updateDoc, runTransaction, writeBatch, collectionGroup, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+    import { getFirestore, doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc, query, where, getDocs, getDoc, updateDoc, runTransaction, writeBatch, collectionGroup, orderBy, limit, setDoc } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
     import { initializeFluxoDeCaixa } from './fluxo-de-caixa.js';
     import { initializeMovimentacaoBancaria } from './movimentacao-bancaria.js';
     import { initializeNotifications, initializeNotificationsPage } from './notifications.js';
@@ -5416,9 +5416,13 @@
                 const userDocRef = doc(db, 'users', user.uid);
                 const userDocSnap = await getDoc(userDocRef);
 
-                if (userDocSnap.exists() && userDocSnap.data().primeiroAcesso === true) {
+                if (!userDocSnap.exists()) {
+                    await setDoc(userDocRef, { primeiroAcesso: true, email: user.email });
                     adminChangePasswordModal.classList.remove('hidden');
-                    return; 
+                    return;
+                } else if (userDocSnap.data().primeiroAcesso === true) {
+                    adminChangePasswordModal.classList.remove('hidden');
+                    return;
                 }
             } catch (error) {
                 console.error("Error checking for first admin login:", error);
