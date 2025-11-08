@@ -660,6 +660,9 @@ export function initializeFluxoDeCaixa(db, userId, common) {
 
         let runningSaldoRealizado = saldoAnterior;
         let runningSaldoProjetado = saldoAnterior;
+        let runningSaldoSimulado = includeProjections ? saldoAnterior : saldoAnterior; // Initialize based on projection inclusion
+        let runningSaldoComparado = includeProjections ? saldoAnterior : saldoAnterior; // Initialize based on projection inclusion
+
 
         sortedDays.forEach(day => {
             labels.push(new Date(day + 'T00:00:00').toLocaleDateString('pt-BR'));
@@ -669,21 +672,19 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             runningSaldoRealizado += changes.realizado;
             runningSaldoProjetado += changes.realizado + changes.projetado;
 
-            let saldoSimuladoDoDia;
-            let saldoComparadoDoDia;
-
             if (includeProjections) {
-                saldoSimuladoDoDia = runningSaldoProjetado + changes.simulado;
-                saldoComparadoDoDia = runningSaldoProjetado + changes.comparado;
+                runningSaldoSimulado = runningSaldoProjetado + changes.simulado;
+                runningSaldoComparado = runningSaldoProjetado + changes.comparado;
             } else {
-                saldoSimuladoDoDia = runningSaldoRealizado + changes.simulado;
-                saldoComparadoDoDia = runningSaldoRealizado + changes.comparado;
+                runningSaldoSimulado = runningSaldoRealizado + changes.simulado;
+                runningSaldoComparado = runningSaldoRealizado + changes.comparado;
             }
+
 
             realizadoData.push(runningSaldoRealizado / 100);
             projetadoData.push(runningSaldoProjetado / 100);
-            simuladoData.push(saldoSimuladoDoDia / 100);
-            comparadoData.push(saldoComparadoDoDia / 100);
+            simuladoData.push(runningSaldoSimulado / 100);
+            comparadoData.push(runningSaldoComparado / 100);
         });
 
         return { labels, realizadoData, projetadoData, simuladoData, comparadoData };
