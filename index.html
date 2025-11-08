@@ -3509,6 +3509,34 @@
         </div>
     </div>
 
+  <!-- Modal de Troca de Senha Obrigatória para Admin -->
+    <div id="admin-change-password-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-2xl font-bold text-gray-900">Defina sua Nova Senha de Administrador</h3>
+            </div>
+            <div class="mt-5">
+                <p class="text-gray-600 text-sm mb-4">Este é seu primeiro acesso como administrador. Por segurança, você precisa definir uma nova senha.</p>
+                <form id="admin-change-password-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700" for="admin-new-password">Nova Senha</label>
+                        <input type="password" id="admin-new-password" required class="form-input mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700" for="admin-confirm-password">Confirme a Nova Senha</label>
+                        <input type="password" id="admin-confirm-password" required class="form-input mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    </div>
+                    <div id="admin-change-password-error" class="text-red-500 text-sm"></div>
+                    <div class="flex justify-end pt-4">
+                        <button type="submit" class="inline-flex items-center justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700">
+                            Salvar e Continuar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
 
   <script type="module" src="fluxo-de-caixa.js"></script>
   <script type="module" src="movimentacao-bancaria.js"></script>
@@ -3542,7 +3570,7 @@
   <script type="module">
     // Importações do Firebase SDK
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
     import { getFirestore, doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc, query, where, getDocs, getDoc, updateDoc, runTransaction, writeBatch, collectionGroup, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
     import { initializeFluxoDeCaixa } from './fluxo-de-caixa.js';
     import { initializeMovimentacaoBancaria } from './movimentacao-bancaria.js';
@@ -3594,6 +3622,9 @@
     const changePasswordModal = document.getElementById('change-password-modal');
     const changePasswordForm = document.getElementById('change-password-form');
     const changePasswordError = document.getElementById('change-password-error');
+    const adminChangePasswordModal = document.getElementById('admin-change-password-modal');
+    const adminChangePasswordForm = document.getElementById('admin-change-password-form');
+    const adminChangePasswordError = document.getElementById('admin-change-password-error');
 
     // Elementos de usuário e logout
     const userEmailSpan = document.getElementById('user-email');
@@ -5372,7 +5403,7 @@
         }
     }
 
-    onAuthStateChanged(auth, (user) => {
+    onAuthStateChanged(auth, async (user) => {
         detachListeners();
 
         const commonUtils = { formatCurrency, toCents, fromCents, showFeedback };
@@ -5380,6 +5411,19 @@
         // Caso 1: Usuário do Firebase (admin) está logado.
         if (user) {
             console.log("Usuário Firebase (admin) detectado.");
+
+            try {
+                const userDocRef = doc(db, 'users', user.uid);
+                const userDocSnap = await getDoc(userDocRef);
+
+                if (userDocSnap.exists() && userDocSnap.data().primeiroAcesso === true) {
+                    adminChangePasswordModal.classList.remove('hidden');
+                    return; 
+                }
+            } catch (error) {
+                console.error("Error checking for first admin login:", error);
+            }
+
             effectiveUserId = user.uid;
             currentUserName = user.email;
 
@@ -5612,6 +5656,44 @@
         } catch (error) {
             console.error("Erro ao alterar senha:", error);
             changePasswordError.textContent = 'Ocorreu um erro ao alterar a senha.';
+        }
+    });
+
+    adminChangePasswordForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        adminChangePasswordError.textContent = '';
+        const newPassword = document.getElementById('admin-new-password').value;
+        const confirmPassword = document.getElementById('admin-confirm-password').value;
+        const user = auth.currentUser;
+
+        if (!user) {
+            adminChangePasswordError.textContent = 'Erro: Usuário não autenticado.';
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            adminChangePasswordError.textContent = 'As senhas não conferem.';
+            return;
+        }
+        if (newPassword.length < 6) {
+            adminChangePasswordError.textContent = 'A senha deve ter no mínimo 6 caracteres.';
+            return;
+        }
+
+        try {
+            await updatePassword(user, newPassword);
+
+            const userDocRef = doc(db, "users", user.uid);
+            await updateDoc(userDocRef, {
+                primeiroAcesso: false
+            });
+
+            adminChangePasswordModal.classList.add('hidden');
+            location.reload();
+
+        } catch (error) {
+            console.error("Erro ao alterar senha do admin:", error);
+            adminChangePasswordError.textContent = 'Ocorreu um erro ao alterar a senha. Faça o login novamente.';
         }
     });
 
