@@ -203,7 +203,7 @@ export async function fetchFinancialLedger(db, userId, options = {}) {
 
     const constraints = [];
     if (startDate) {
-        constraints.push(where('dataTransacao', inclusive ? '>=' : '<', startDate));
+        constraints.push(where('dataTransacao', inclusive ? '>=' : '>', startDate));
     }
     if (endDate) {
         constraints.push(where('dataTransacao', inclusive ? '<=' : '<', endDate));
