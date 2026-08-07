@@ -1,20 +1,21 @@
 from pathlib import Path
-import re
 
 source_path = Path('scripts/apply-pr13-complete-fix.py')
 source = source_path.read_text(encoding='utf-8')
 
-replacement = r'''old_reconciliation = """        try {\n            await updateDoc(docRef, { conciliado: isConciliado });\n            const row = checkbox.closest('tr');\n            row.classList.toggle('bg-green-50', isConciliado);"""
-new_reconciliation = """        try {\n            if (type === 'pagamento' || type === 'recebimento') {\n                const ledgerRef = doc(\n                    db,\n                    `users/${userId}/movimentacoesFinanceiras`,\n                    financialMovementDocId(type, parentId, transacaoId)\n                );\n                await Promise.all([\n                    updateDoc(docRef, { conciliado: isConciliado }),\n                    updateDoc(ledgerRef, { conciliado: isConciliado })\n                ]);\n            } else {\n                await updateDoc(docRef, { conciliado: isConciliado });\n            }\n            const row = checkbox.closest('tr');\n            row.classList.toggle('bg-green-50', isConciliado);"""'''
-
-source, count = re.subn(
-    r'old_reconciliation = """.*?"""\nnew_reconciliation = """.*?"""',
-    lambda _: replacement,
-    source,
+old_call = 'text = replace_once(text, old_reconciliation, new_reconciliation, "cash-flow reconciliation ledger sync")'
+new_call = r'''text, reconciliation_count = re.subn(
+    r"        try \\{\\s*await updateDoc\\(docRef, \\{ conciliado: isConciliado \\}\\);\\s*const row = checkbox\\.closest\\('tr'\\);\\s*row\\.classList\\.toggle\\('bg-green-50', isConciliado\\);",
+    lambda _: new_reconciliation,
+    text,
     count=1,
     flags=re.S,
 )
-if count != 1:
-    raise RuntimeError(f'could not patch reconciliation matcher; replacements={count}')
+if reconciliation_count != 1:
+    raise RuntimeError(f"cash-flow reconciliation ledger sync: expected 1 occurrence, found {reconciliation_count}")'''
+
+if source.count(old_call) != 1:
+    raise RuntimeError(f'could not patch reconciliation call; occurrences={source.count(old_call)}')
+source = source.replace(old_call, new_call, 1)
 
 exec(compile(source, str(source_path), 'exec'), {'__name__': '__main__'})
