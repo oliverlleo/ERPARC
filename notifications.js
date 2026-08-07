@@ -3,6 +3,52 @@ import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestam
 // --- Notification Generation Logic ---
 
 /**
+ * Keeps the employee/system-user association dropdown on the canonical
+ * `systemUsers` collection. The current monolithic index still contains a
+ * legacy listener for `usuarios`; this compatibility bridge repairs any
+ * legacy render without changing persisted data or requiring a migration.
+ */
+function syncSystemUsersDropdown(db, userId) {
+    const select = document.getElementById('funcionario-usuario-sistema');
+    if (!select || select.dataset.systemUsersSyncBound === 'true') return;
+    select.dataset.systemUsersSyncBound = 'true';
+
+    let systemUsers = [];
+
+    const renderCanonicalOptions = () => {
+        const previousValue = select.value;
+        select.innerHTML = '<option value="">Selecione uma opção</option>';
+
+        systemUsers.forEach(userDoc => {
+            const data = userDoc.data();
+            const option = document.createElement('option');
+            option.value = userDoc.id;
+            option.textContent = data.nome || data.nomeUsuario || 'Nome não encontrado';
+            option.dataset.source = 'systemUsers';
+            select.appendChild(option);
+        });
+
+        if (systemUsers.some(userDoc => userDoc.id === previousValue)) {
+            select.value = previousValue;
+        }
+    };
+
+    const observer = new MutationObserver(() => {
+        const nonPlaceholderOptions = Array.from(select.options).slice(1);
+        const hasLegacyOptions = nonPlaceholderOptions.some(option => option.dataset.source !== 'systemUsers');
+        if (hasLegacyOptions) renderCanonicalOptions();
+    });
+    observer.observe(select, { childList: true });
+
+    onSnapshot(collection(db, 'users', userId, 'systemUsers'), snapshot => {
+        systemUsers = snapshot.docs;
+        renderCanonicalOptions();
+    }, error => {
+        console.error('Erro ao sincronizar usuários do sistema:', error);
+    });
+}
+
+/**
  * Checks if a specific notification already exists to prevent duplicates.
  * @param {object} db - The Firestore database instance.
  * @param {string} userId - The ID of the user.
@@ -92,12 +138,17 @@ async function checkContasAPagar(db, userId) {
         }
     });
 
-    // Query 2: For overdue items
-    const qOverdue = query(despesasRef, where("status", "==", "Vencido"));
+    // Query 2: derive overdue state from due date, matching the UI logic.
+    // Keep status filtering client-side so pending and partially paid titles are included.
+    const qOverdue = query(despesasRef, where("vencimento", "<", todayStr));
     const overdueSnapshot = await getDocs(qOverdue);
+    const overdueStatuses = new Set(["Pendente", "Vencido", "Pago Parcialmente"]);
 
     overdueSnapshot.forEach(doc => {
         const despesa = doc.data();
+        const status = despesa.status || "Pendente";
+        if (!overdueStatuses.has(status)) return;
+
         const valor = despesa.valorSaldo ?? despesa.valorOriginal ?? 0;
         createNotification(db, userId, {
             relatedId: doc.id,
@@ -165,12 +216,22 @@ async function checkContasAReceber(db, userId) {
         }
     });
 
-    // Query 2: For overdue items
-    const qOverdue = query(receitasRef, where("status", "==", "Vencido"));
-    const overdueSnapshot = await getDocs(qOverdue);
+    // Query 2: derive overdue state from due date. Query both the current and
+    // legacy due-date fields, then dedupe to preserve existing records.
+    const [overdueByDataVencimento, overdueByVencimento] = await Promise.all([
+        getDocs(query(receitasRef, where("dataVencimento", "<", todayStr))),
+        getDocs(query(receitasRef, where("vencimento", "<", todayStr)))
+    ]);
+    const overdueReceitas = new Map();
+    overdueByDataVencimento.forEach(doc => overdueReceitas.set(doc.id, doc));
+    overdueByVencimento.forEach(doc => overdueReceitas.set(doc.id, doc));
+    const overdueStatuses = new Set(["Pendente", "Vencido", "Recebido Parcialmente"]);
 
-    overdueSnapshot.forEach(doc => {
+    overdueReceitas.forEach(doc => {
         const receita = doc.data();
+        const status = receita.status || "Pendente";
+        if (!overdueStatuses.has(status)) return;
+
         createNotification(db, userId, {
             relatedId: doc.id,
             type: 'alerta_atraso_receber',
@@ -201,6 +262,7 @@ function checkAllNotifications(db, userId) {
 export function initializeNotifications(db, userId) {
     if (!userId) return;
 
+    syncSystemUsersDropdown(db, userId);
     checkAllNotifications(db, userId);
     setInterval(() => checkAllNotifications(db, userId), 300000); // Check every 5 minutes
 
