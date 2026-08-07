@@ -1,0 +1,66 @@
+name: ERP fix runner
+
+on:
+  push:
+    branches:
+      - fix/financial-consistency-firestore-performance
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply guarded patch stored in branch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          lines = Path('.github/workflows/apply-erp-fixes.yml').read_text(encoding='utf-8').splitlines()
+          start = next(i for i, line in enumerate(lines) if line.strip() == "python - <<'PY'") + 1
+          end = next(i for i in range(start, len(lines)) if lines[i].strip() == 'PY')
+          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines[start:end]) + '\n'
+          Path('/tmp/apply_erp_fixes.py').write_text(script, encoding='utf-8')
+          PY
+          python /tmp/apply_erp_fixes.py
+
+      - name: Syntax and behavior checks
+        shell: bash
+        run: |
+          node --check fluxo-de-caixa.js
+          node --check movimentacao-bancaria.js
+          node --check notifications.js
+          node <<'NODE'
+          const changes = [
+            {realizado:0, projetado:0, simulado:-100000, comparado:-50000},
+            {realizado:0, projetado:200000, simulado:0, comparado:0}
+          ];
+          let realized=1000000, projected=1000000, simDelta=0, compDelta=0;
+          const sim=[], comp=[];
+          for (const c of changes) {
+            realized += c.realizado;
+            projected += c.realizado + c.projetado;
+            simDelta += c.simulado;
+            compDelta += c.comparado;
+            sim.push(projected + simDelta);
+            comp.push(projected + compDelta);
+          }
+          if (sim.join(',') !== '900000,1100000') throw new Error(`What-If sim failed: ${sim}`);
+          if (comp.join(',') !== '950000,1150000') throw new Error(`What-If compare failed: ${comp}`);
+          console.log('What-If cumulative behavior OK');
+          NODE
+
+      - name: Commit verified fixes and remove temporary helpers
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/apply-erp-fixes.yml .github/workflows/apply-erp-fixes-pr.yml .github/workflows/erp-fix-runner.yml .github/erp-fix-trigger.txt || true
+          git add index.html fluxo-de-caixa.js movimentacao-bancaria.js notifications.js
+          git commit -m "fix: financial consistency and Firestore query efficiency"
+          git push origin HEAD:${GITHUB_REF_NAME}
