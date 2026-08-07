@@ -8,6 +8,12 @@ if source.count(old_call) != 1:
     raise RuntimeError(f'reconciliation call not found exactly once: {source.count(old_call)}')
 source = source.replace(old_call, 'pass  # reconciliation is patched against the real file below', 1)
 
+old_estorno_anchor = '    async function estornarLancamentoSelecionado() {'
+real_estorno_anchor = '    async function handleEstorno() {'
+if source.count(old_estorno_anchor) != 1:
+    raise RuntimeError(f'bank reversal anchor definition not found exactly once: {source.count(old_estorno_anchor)}')
+source = source.replace(old_estorno_anchor, real_estorno_anchor, 1)
+
 # Apply every other deterministic source transformation first.
 exec(compile(source, str(source_path), 'exec'), {'__name__': '__main__'})
 
