@@ -1,0 +1,74 @@
+name: Complete PR13 fixes on push
+
+on:
+  push:
+    branches:
+      - fix/financial-consistency-firestore-performance
+
+permissions:
+  contents: write
+
+jobs:
+  complete-fix:
+    if: github.event.head_commit.message != 'complete financial ledger and dashboard optimization'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/financial-consistency-firestore-performance
+          fetch-depth: 0
+
+      - name: Extract and apply prepared patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          workflow = Path('.github/workflows/complete-pr13-financial-fixes.yml').read_text(encoding='utf-8').splitlines()
+          start = next(i for i, line in enumerate(workflow) if "python3 - <<'PY'" in line) + 1
+          end = next(i for i in range(start, len(workflow)) if workflow[i].strip() == 'PY')
+          script_lines = workflow[start:end]
+          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in script_lines) + '\n'
+          Path('/tmp/complete-pr13.py').write_text(script, encoding='utf-8')
+          PY
+          python3 /tmp/complete-pr13.py
+
+      - name: Validate syntax and N+1 removal
+        shell: bash
+        run: |
+          node --check financial-ledger.js
+          node --check fluxo-de-caixa.js
+          node --check movimentacao-bancaria.js
+          node --check notifications.js
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path('index.html').read_text(encoding='utf-8')
+          fluxo = Path('fluxo-de-caixa.js').read_text(encoding='utf-8')
+          notifications = Path('notifications.js').read_text(encoding='utf-8')
+          assert "allDespesas.map(doc => getDocs(collection(doc.ref, 'pagamentos')))" not in html
+          assert "allReceitas.map(doc => getDocs(collection(doc.ref, 'recebimentos')))" not in html
+          assert 'fetchTransactionsEfficiently' not in fluxo
+          assert "fetchFinancialLedger(db, userId" in fluxo
+          assert "collection(db, 'users', userId, 'systemUsers')" in html
+          assert "collection(db, 'users', userId, 'usuarios')" not in html
+          assert 'syncSystemUsersDropdown' not in notifications
+          assert 'movimentacoesFinanceiras' in html
+          scripts = re.findall(r'<script type="module">(.*?)</script>', html, flags=re.S)
+          main_script = next((s for s in scripts if 'Importações do Firebase SDK' in s), None)
+          if not main_script:
+              raise RuntimeError('main inline module not found')
+          Path('/tmp/index-main.mjs').write_text(main_script, encoding='utf-8')
+          PY
+          node --check /tmp/index-main.mjs
+          git diff --check
+
+      - name: Commit completed fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html fluxo-de-caixa.js movimentacao-bancaria.js notifications.js
+          git diff --cached --quiet && exit 0
+          git commit -m "complete financial ledger and dashboard optimization"
+          git push origin HEAD:fix/financial-consistency-firestore-performance
