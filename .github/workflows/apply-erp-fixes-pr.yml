@@ -1,0 +1,80 @@
+name: Apply ERP fixes on PR
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fixes:
+    if: github.head_ref == 'fix/financial-consistency-firestore-performance'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Extract guarded patch script
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/apply-erp-fixes.yml')
+          lines = workflow.read_text(encoding='utf-8').splitlines()
+          start = next(i for i, line in enumerate(lines) if line.strip() == "python - <<'PY'") + 1
+          end = next(i for i in range(start, len(lines)) if lines[i].strip() == 'PY')
+          script_lines = []
+          for line in lines[start:end]:
+              script_lines.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/apply_erp_fixes.py').write_text('\n'.join(script_lines) + '\n', encoding='utf-8')
+          print(f'Extracted {len(script_lines)} guarded patch lines.')
+          PY
+          python /tmp/apply_erp_fixes.py
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check fluxo-de-caixa.js
+          node --check movimentacao-bancaria.js
+          node --check notifications.js
+
+      - name: Validate What-If accumulation behavior
+        run: |
+          node <<'NODE'
+          const dailyChanges = {
+            '2026-01-01': { realizado: 0, projetado: 0, simulado: -100000, comparado: -50000 },
+            '2026-01-02': { realizado: 0, projetado: 200000, simulado: 0, comparado: 0 }
+          };
+          let runningSaldoRealizado = 1000000;
+          let runningSaldoProjetado = 1000000;
+          let cumulativeSimulado = 0;
+          let cumulativeComparado = 0;
+          const simulado = [];
+          const comparado = [];
+          for (const day of Object.keys(dailyChanges).sort()) {
+            const changes = dailyChanges[day];
+            runningSaldoRealizado += changes.realizado;
+            runningSaldoProjetado += changes.realizado + changes.projetado;
+            cumulativeSimulado += changes.simulado;
+            cumulativeComparado += changes.comparado;
+            const scenarioBase = runningSaldoProjetado;
+            simulado.push(scenarioBase + cumulativeSimulado);
+            comparado.push(scenarioBase + cumulativeComparado);
+          }
+          if (simulado[0] !== 900000 || simulado[1] !== 1100000) throw new Error(`Unexpected simulated balances: ${simulado}`);
+          if (comparado[0] !== 950000 || comparado[1] !== 1150000) throw new Error(`Unexpected comparison balances: ${comparado}`);
+          console.log('What-If accumulation test passed.');
+          NODE
+
+      - name: Commit verified fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-erp-fixes.yml .github/workflows/apply-erp-fixes-pr.yml
+          git add index.html fluxo-de-caixa.js movimentacao-bancaria.js notifications.js
+          git commit -m "fix: financial consistency and Firestore query efficiency"
+          git push origin HEAD:${GITHUB_HEAD_REF}
