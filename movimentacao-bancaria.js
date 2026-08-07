@@ -230,7 +230,7 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
             batch.update(ref, {
                 conciliado: conciliar,
                 dataConciliacao: conciliar ? new Date().toISOString().split('T')[0] : null,
-                usuarioConciliacao: conciliar ? "currentUserName" : null // Replace with actual user name
+                usuarioConciliacao: conciliar ? currentUserName : null
             });
         });
 
