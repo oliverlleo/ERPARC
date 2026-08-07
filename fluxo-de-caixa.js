@@ -1,4 +1,5 @@
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp, runTransaction, updateDoc, collectionGroup } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { fetchFinancialLedger, fetchDocumentsByIds, financialMovementDocId } from './financial-ledger.js';
 
 // This function will be called from the main script when the user is authenticated.
 export function initializeFluxoDeCaixa(db, userId, common) {
@@ -57,30 +58,6 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     const { formatCurrency, toCents, fromCents, showFeedback } = common;
 
     // --- Main Logic ---
-    async function fetchTransactionsEfficiently(parentCollectionName, subcollectionName, startDate, endDate, inclusive = true) {
-        const parentCollectionRef = collection(db, `users/${userId}/${parentCollectionName}`);
-        const parentDocsSnapshot = await getDocs(parentCollectionRef);
-
-        // Preserve the existing transaction-date semantics while carrying the already-loaded
-        // parent snapshot along with every payment/receipt. This removes one getDoc(parent)
-        // per transaction later in enrichAndUnifyTransactions without changing stored data.
-        const transactionGroups = await Promise.all(parentDocsSnapshot.docs.map(async parentDoc => {
-            let subcollectionQuery = collection(parentDoc.ref, subcollectionName);
-
-            if (startDate) {
-                subcollectionQuery = query(subcollectionQuery, where('dataTransacao', inclusive ? '>=' : '<', startDate));
-            }
-            if (endDate) {
-                subcollectionQuery = query(subcollectionQuery, where('dataTransacao', inclusive ? '<=' : '<', endDate));
-            }
-
-            const transactionSnapshot = await getDocs(subcollectionQuery);
-            return transactionSnapshot.docs.map(transactionDoc => ({ transactionDoc, parentDoc }));
-        }));
-
-        return transactionGroups.flat();
-    }
-
     async function fetchProjectedTransactions(startDate, endDate) {
         const unifiedProjected = [];
         const planoContasMap = new Map();
@@ -191,12 +168,11 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             let unifiedTransactions = [];
 
             if (showRealizado) {
-                const [pagamentos, recebimentos, transferencias] = await Promise.all([
-                    fetchTransactionsEfficiently('despesas', 'pagamentos', startDate, endDate),
-                    fetchTransactionsEfficiently('receitas', 'recebimentos', startDate, endDate),
+                const [financialMovements, transferencias] = await Promise.all([
+                    fetchFinancialLedger(db, userId, { startDate, endDate }),
                     fetchCollection('transferencias', startDate, endDate)
                 ]);
-                const realizedTransactions = await enrichAndUnifyTransactions(pagamentos, recebimentos, transferencias);
+                const realizedTransactions = await enrichAndUnifyTransactions(financialMovements, transferencias);
                 unifiedTransactions.push(...realizedTransactions);
             }
 
@@ -271,13 +247,12 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         }
 
         // 2. Get past transactions
-        const [pagamentos, recebimentos, transferencias] = await Promise.all([
-            fetchTransactionsEfficiently('despesas', 'pagamentos', null, startDate, false),
-            fetchTransactionsEfficiently('receitas', 'recebimentos', null, startDate, false),
+        const [financialMovements, transferencias] = await Promise.all([
+            fetchFinancialLedger(db, userId, { endDate: startDate, inclusive: false }),
             fetchCollection('transferencias', null, startDate, false)
         ]);
 
-        const allTransactions = await enrichAndUnifyTransactions(pagamentos, recebimentos, transferencias);
+        const allTransactions = await enrichAndUnifyTransactions(financialMovements, transferencias);
         const filteredTransactions = applyFilters(allTransactions, contaId, 'todas');
 
         // 3. Add effect of past transactions to the initial balance
@@ -308,87 +283,80 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         return snapshot.docs;
     }
 
-    async function enrichAndUnifyTransactions(pagamentos, recebimentos, transferencias) {
+    async function enrichAndUnifyTransactions(financialMovements, transferencias) {
         const unified = [];
+        const pagamentos = financialMovements.filter(movement => movement.tipo === 'pagamento');
+        const recebimentos = financialMovements.filter(movement => movement.tipo === 'recebimento');
+
+        const [despesasById, receitasById, planoContasSnap] = await Promise.all([
+            fetchDocumentsByIds(db, userId, 'despesas', pagamentos.map(movement => movement.origemParentId)),
+            fetchDocumentsByIds(db, userId, 'receitas', recebimentos.map(movement => movement.origemParentId)),
+            getDocs(collection(db, `users/${userId}/planosDeContas`))
+        ]);
+
         const planoContasMap = new Map();
-        const planoContasSnap = await getDocs(collection(db, `users/${userId}/planosDeContas`));
-        planoContasSnap.forEach(doc => {
-            planoContasMap.set(doc.id, doc.data());
-        });
+        planoContasSnap.forEach(snapshotDoc => planoContasMap.set(snapshotDoc.id, snapshotDoc.data()));
 
-        for (const entry of pagamentos) {
-            const doc = entry.transactionDoc || entry;
-            const data = doc.data();
-            if (data.estornado === true || data.tipoTransacao === 'Estorno') continue;
-            const parentDespesaRef = entry.parentDoc?.ref || doc.ref.parent.parent;
-            if (parentDespesaRef) {
-                const despesaSnap = entry.parentDoc || await getDoc(parentDespesaRef);
-                if (despesaSnap.exists()) {
-                    const despesaData = despesaSnap.data();
-                    const categoria = planoContasMap.get(despesaData.categoriaId);
-                    unified.push({
-                        id: doc.id,
-                        parentId: parentDespesaRef.id,
-                        data: data.dataTransacao,
-                        descricao: despesaData.descricao,
-                        participante: despesaData.favorecidoNome || 'N/A',
-                        planoDeConta: categoria ? categoria.nome : 'N/A',
-                        dataVencimento: despesaData.vencimento,
-                        tipoAtividade: categoria ? categoria.tipoDeAtividade : 'Operacional',
-                        entrada: 0,
-                        saida: data.valorPrincipal || 0,
-                        juros: data.jurosPagos || 0,
-                        desconto: data.descontosAplicados || 0,
-                        contaId: data.contaSaidaId,
-                        conciliado: data.conciliado || false,
-                        type: 'pagamento'
-                    });
-                }
-            }
-        }
-
-        for (const entry of recebimentos) {
-            const doc = entry.transactionDoc || entry;
-            const data = doc.data();
-            if (data.estornado === true || data.tipoTransacao === 'Estorno') continue;
-            const parentReceitaRef = entry.parentDoc?.ref || doc.ref.parent.parent;
-             if (parentReceitaRef) {
-                const receitaSnap = entry.parentDoc || await getDoc(parentReceitaRef);
-                 if (receitaSnap.exists()) {
-                    const receitaData = receitaSnap.data();
-                    const categoria = planoContasMap.get(receitaData.categoriaId);
-                    unified.push({
-                        id: doc.id,
-                        parentId: parentReceitaRef.id,
-                        data: data.dataTransacao,
-                        descricao: receitaData.descricao,
-                        participante: receitaData.clienteNome || 'N/A',
-                        planoDeConta: categoria ? categoria.nome : 'N/A',
-                        dataVencimento: receitaData.dataVencimento,
-                        tipoAtividade: categoria ? categoria.tipoDeAtividade : 'Operacional',
-                        entrada: data.valorPrincipal || 0,
-                        saida: 0,
-                        juros: data.jurosRecebidos || 0,
-                        desconto: data.descontosConcedidos || 0,
-                        contaId: data.contaEntradaId,
-                        conciliado: data.conciliado || false,
-                        type: 'recebimento'
-                    });
-                }
-            }
-        }
-
-        for (const doc of transferencias) {
-            const data = doc.data();
+        for (const movement of pagamentos) {
+            const despesaSnap = despesasById.get(movement.origemParentId);
+            if (!despesaSnap || movement.estornado === true) continue;
+            const despesaData = despesaSnap.data();
+            const categoria = planoContasMap.get(despesaData.categoriaId);
             unified.push({
-                id: doc.id,
+                id: movement.origemId || movement.id,
+                parentId: movement.origemParentId,
+                data: movement.dataTransacao,
+                descricao: despesaData.descricao,
+                participante: despesaData.favorecidoNome || 'N/A',
+                planoDeConta: categoria ? categoria.nome : 'N/A',
+                dataVencimento: despesaData.vencimento,
+                tipoAtividade: categoria ? categoria.tipoDeAtividade : 'Operacional',
+                entrada: 0,
+                saida: movement.valorPrincipal || 0,
+                juros: movement.juros || 0,
+                desconto: movement.desconto || 0,
+                contaId: movement.contaBancariaId,
+                conciliado: movement.conciliado || false,
+                type: 'pagamento'
+            });
+        }
+
+        for (const movement of recebimentos) {
+            const receitaSnap = receitasById.get(movement.origemParentId);
+            if (!receitaSnap || movement.estornado === true) continue;
+            const receitaData = receitaSnap.data();
+            if ((receitaData.status || 'Pendente') === 'Desdobrado') continue;
+            const categoria = planoContasMap.get(receitaData.categoriaId);
+            unified.push({
+                id: movement.origemId || movement.id,
+                parentId: movement.origemParentId,
+                data: movement.dataTransacao,
+                descricao: receitaData.descricao,
+                participante: receitaData.clienteNome || 'N/A',
+                planoDeConta: categoria ? categoria.nome : 'N/A',
+                dataVencimento: receitaData.dataVencimento || receitaData.vencimento,
+                tipoAtividade: categoria ? categoria.tipoDeAtividade : 'Operacional',
+                entrada: movement.valorPrincipal || 0,
+                saida: 0,
+                juros: movement.juros || 0,
+                desconto: movement.desconto || 0,
+                contaId: movement.contaBancariaId,
+                conciliado: movement.conciliado || false,
+                type: 'recebimento'
+            });
+        }
+
+        for (const snapshotDoc of transferencias) {
+            const data = snapshotDoc.data();
+            unified.push({
+                id: snapshotDoc.id,
                 data: data.dataTransacao,
                 descricao: `Transferência de ${data.contaOrigemNome} para ${data.contaDestinoNome}`,
                 participante: 'Interno',
                 planoDeConta: 'Transferência',
-                dataVencimento: data.dataTransacao, // Vencimento é a própria data
+                dataVencimento: data.dataTransacao,
                 tipoAtividade: 'N/A',
-                valor: data.valor, // Valor único para ser tratado na renderização
+                valor: data.valor,
                 juros: 0,
                 desconto: 0,
                 contaOrigemId: data.contaOrigemId,
@@ -872,19 +840,19 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         const prevEndDateStr = prevEndDate.toISOString().split('T')[0];
 
         try {
-            const [pagamentosAnteriores, recebimentosAnteriores] = await Promise.all([
-                fetchTransactionsEfficiently('despesas', 'pagamentos', prevStartDateStr, prevEndDateStr),
-                fetchTransactionsEfficiently('receitas', 'recebimentos', prevStartDateStr, prevEndDateStr)
-            ]);
+            const financialMovementsAnteriores = await fetchFinancialLedger(db, userId, {
+                startDate: prevStartDateStr,
+                endDate: prevEndDateStr
+            });
 
-            const transacoesAnteriores = await enrichAndUnifyTransactions(pagamentosAnteriores, recebimentosAnteriores, []);
+            const transacoesAnteriores = await enrichAndUnifyTransactions(financialMovementsAnteriores, []);
             const kpisAnteriores = calculateKPIs(0, transacoesAnteriores, 'todas');
 
-            const [pagamentosAtuais, recebimentosAtuais] = await Promise.all([
-                fetchTransactionsEfficiently('despesas', 'pagamentos', startDateStr, endDateStr),
-                fetchTransactionsEfficiently('receitas', 'recebimentos', startDateStr, endDateStr)
-            ]);
-            const transacoesAtuais = await enrichAndUnifyTransactions(pagamentosAtuais, recebimentosAtuais, []);
+            const financialMovementsAtuais = await fetchFinancialLedger(db, userId, {
+                startDate: startDateStr,
+                endDate: endDateStr
+            });
+            const transacoesAtuais = await enrichAndUnifyTransactions(financialMovementsAtuais, []);
             const kpisAtuais = calculateKPIs(0, transacoesAtuais, 'todas');
 
             const data = {
@@ -1376,7 +1344,19 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             const docRef = doc(db, `users/${userId}/${parentCollectionName}/${parentId}/${collectionName}/${transacaoId}`);
 
             try {
-                await updateDoc(docRef, { conciliado: isConciliado });
+                if (type === 'pagamento' || type === 'recebimento') {
+                    const ledgerRef = doc(
+                        db,
+                        `users/${userId}/movimentacoesFinanceiras`,
+                        financialMovementDocId(type, parentId, transacaoId)
+                    );
+                    await Promise.all([
+                        updateDoc(docRef, { conciliado: isConciliado }),
+                        updateDoc(ledgerRef, { conciliado: isConciliado })
+                    ]);
+                } else {
+                    await updateDoc(docRef, { conciliado: isConciliado });
+                }
                 const row = checkbox.closest('tr');
                 row.classList.toggle('bg-green-50', isConciliado);
             } catch (error) {

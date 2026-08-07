@@ -3,52 +3,6 @@ import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestam
 // --- Notification Generation Logic ---
 
 /**
- * Keeps the employee/system-user association dropdown on the canonical
- * `systemUsers` collection. The current monolithic index still contains a
- * legacy listener for `usuarios`; this compatibility bridge repairs any
- * legacy render without changing persisted data or requiring a migration.
- */
-function syncSystemUsersDropdown(db, userId) {
-    const select = document.getElementById('funcionario-usuario-sistema');
-    if (!select || select.dataset.systemUsersSyncBound === 'true') return;
-    select.dataset.systemUsersSyncBound = 'true';
-
-    let systemUsers = [];
-
-    const renderCanonicalOptions = () => {
-        const previousValue = select.value;
-        select.innerHTML = '<option value="">Selecione uma opção</option>';
-
-        systemUsers.forEach(userDoc => {
-            const data = userDoc.data();
-            const option = document.createElement('option');
-            option.value = userDoc.id;
-            option.textContent = data.nome || data.nomeUsuario || 'Nome não encontrado';
-            option.dataset.source = 'systemUsers';
-            select.appendChild(option);
-        });
-
-        if (systemUsers.some(userDoc => userDoc.id === previousValue)) {
-            select.value = previousValue;
-        }
-    };
-
-    const observer = new MutationObserver(() => {
-        const nonPlaceholderOptions = Array.from(select.options).slice(1);
-        const hasLegacyOptions = nonPlaceholderOptions.some(option => option.dataset.source !== 'systemUsers');
-        if (hasLegacyOptions) renderCanonicalOptions();
-    });
-    observer.observe(select, { childList: true });
-
-    onSnapshot(collection(db, 'users', userId, 'systemUsers'), snapshot => {
-        systemUsers = snapshot.docs;
-        renderCanonicalOptions();
-    }, error => {
-        console.error('Erro ao sincronizar usuários do sistema:', error);
-    });
-}
-
-/**
  * Checks if a specific notification already exists to prevent duplicates.
  * @param {object} db - The Firestore database instance.
  * @param {string} userId - The ID of the user.
@@ -262,7 +216,6 @@ function checkAllNotifications(db, userId) {
 export function initializeNotifications(db, userId) {
     if (!userId) return;
 
-    syncSystemUsersDropdown(db, userId);
     checkAllNotifications(db, userId);
     setInterval(() => checkAllNotifications(db, userId), 300000); // Check every 5 minutes
 
