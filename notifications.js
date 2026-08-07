@@ -92,12 +92,17 @@ async function checkContasAPagar(db, userId) {
         }
     });
 
-    // Query 2: For overdue items
-    const qOverdue = query(despesasRef, where("status", "==", "Vencido"));
+    // Query 2: derive overdue state from due date, matching the UI logic.
+    // Keep status filtering client-side so pending and partially paid titles are included.
+    const qOverdue = query(despesasRef, where("vencimento", "<", todayStr));
     const overdueSnapshot = await getDocs(qOverdue);
+    const overdueStatuses = new Set(["Pendente", "Vencido", "Pago Parcialmente"]);
 
     overdueSnapshot.forEach(doc => {
         const despesa = doc.data();
+        const status = despesa.status || "Pendente";
+        if (!overdueStatuses.has(status)) return;
+
         const valor = despesa.valorSaldo ?? despesa.valorOriginal ?? 0;
         createNotification(db, userId, {
             relatedId: doc.id,
@@ -165,12 +170,22 @@ async function checkContasAReceber(db, userId) {
         }
     });
 
-    // Query 2: For overdue items
-    const qOverdue = query(receitasRef, where("status", "==", "Vencido"));
-    const overdueSnapshot = await getDocs(qOverdue);
+    // Query 2: derive overdue state from due date. Query both the current and
+    // legacy due-date fields, then dedupe to preserve existing records.
+    const [overdueByDataVencimento, overdueByVencimento] = await Promise.all([
+        getDocs(query(receitasRef, where("dataVencimento", "<", todayStr))),
+        getDocs(query(receitasRef, where("vencimento", "<", todayStr)))
+    ]);
+    const overdueReceitas = new Map();
+    overdueByDataVencimento.forEach(doc => overdueReceitas.set(doc.id, doc));
+    overdueByVencimento.forEach(doc => overdueReceitas.set(doc.id, doc));
+    const overdueStatuses = new Set(["Pendente", "Vencido", "Recebido Parcialmente"]);
 
-    overdueSnapshot.forEach(doc => {
+    overdueReceitas.forEach(doc => {
         const receita = doc.data();
+        const status = receita.status || "Pendente";
+        if (!overdueStatuses.has(status)) return;
+
         createNotification(db, userId, {
             relatedId: doc.id,
             type: 'alerta_atraso_receber',

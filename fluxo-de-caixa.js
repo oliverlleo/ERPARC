@@ -1,4 +1,5 @@
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp, runTransaction, updateDoc, collectionGroup } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { fetchFinancialLedger, fetchDocumentsByIds, financialMovementDocId } from './financial-ledger.js';
 
 // This function will be called from the main script when the user is authenticated.
 export function initializeFluxoDeCaixa(db, userId, common) {
@@ -57,54 +58,24 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     const { formatCurrency, toCents, fromCents, showFeedback } = common;
 
     // --- Main Logic ---
-    async function fetchTransactionsEfficiently(parentCollectionName, subcollectionName, startDate, endDate, inclusive = true) {
-        // This approach is more efficient as it pre-filters parent documents by a relevant date field.
-        // This reduces the number of subcollection queries needed.
-        const parentDateFilterField = parentCollectionName === 'despesas' ? 'vencimento' : 'dataVencimento';
-
-        // Create a broader query on the parent collection.
-        // We fetch parents from a wider date range to catch transactions that might have been paid/received
-        // outside their due date but still fall within our cash flow period.
-        let parentQuery = collection(db, `users/${userId}/${parentCollectionName}`);
-
-        // The query for subcollections will be precise, so the parent query can be broader.
-        // This is a balance between performance and correctness.
-        // For simplicity in this fix, we'll still fetch all parents, but the sub-query will be precise.
-        // A more advanced optimization could pre-filter parents by date.
-
-        const parentDocsSnapshot = await getDocs(parentQuery);
-
-        const promises = parentDocsSnapshot.docs.map(parentDoc => {
-            let subcollectionQuery = collection(parentDoc.ref, subcollectionName);
-
-            // Apply the precise date filtering at the subcollection level.
-            if (startDate) {
-                 subcollectionQuery = query(subcollectionQuery, where('dataTransacao', inclusive ? '>=' : '<', startDate));
-            }
-            if (endDate) {
-                 subcollectionQuery = query(subcollectionQuery, where('dataTransacao', inclusive ? '<=' : '<', endDate));
-            }
-
-            return getDocs(subcollectionQuery);
-        });
-
-        const querySnapshots = await Promise.all(promises);
-        return querySnapshots.flatMap(snapshot => snapshot.docs);
-    }
-
     async function fetchProjectedTransactions(startDate, endDate) {
         const unifiedProjected = [];
         const planoContasMap = new Map();
         const planoContasSnap = await getDocs(collection(db, `users/${userId}/planosDeContas`));
         planoContasSnap.forEach(doc => planoContasMap.set(doc.id, doc.data()));
 
-        // Fetch ALL pending expenses and filter in code to avoid composite indexes
-        const despesasQuery = collection(db, `users/${userId}/despesas`);
+        // Restrict reads by the selected due-date interval. Status stays client-side, so this
+        // continues to use Firestore's automatic single-field index and avoids composite indexes.
+        const despesasRef = collection(db, `users/${userId}/despesas`);
+        const despesasQuery = query(
+            despesasRef,
+            where('vencimento', '>=', startDate),
+            where('vencimento', '<=', endDate)
+        );
         const despesasSnap = await getDocs(despesasQuery);
         despesasSnap.forEach(doc => {
             const despesaData = doc.data();
             const status = despesaData.status || 'Pendente';
-            // Manual filtering
             if (['Pendente', 'Vencido', 'Pago Parcialmente'].includes(status) && despesaData.vencimento >= startDate && despesaData.vencimento <= endDate) {
                 const categoria = planoContasMap.get(despesaData.categoriaId);
                 unifiedProjected.push({
@@ -125,14 +96,29 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             }
         });
 
-        // Fetch ALL pending revenues and filter in code
-        const receitasQuery = collection(db, `users/${userId}/receitas`);
-        const receitasSnap = await getDocs(receitasQuery);
-        receitasSnap.forEach(doc => {
+        // Accounts receivable have both the current dataVencimento field and legacy vencimento
+        // records. Query both ranges and dedupe by document id to keep backward compatibility.
+        const receitasRef = collection(db, `users/${userId}/receitas`);
+        const [receitasPorDataVencimentoSnap, receitasPorVencimentoSnap] = await Promise.all([
+            getDocs(query(
+                receitasRef,
+                where('dataVencimento', '>=', startDate),
+                where('dataVencimento', '<=', endDate)
+            )),
+            getDocs(query(
+                receitasRef,
+                where('vencimento', '>=', startDate),
+                where('vencimento', '<=', endDate)
+            ))
+        ]);
+        const receitasPorId = new Map();
+        receitasPorDataVencimentoSnap.forEach(doc => receitasPorId.set(doc.id, doc));
+        receitasPorVencimentoSnap.forEach(doc => receitasPorId.set(doc.id, doc));
+
+        receitasPorId.forEach(doc => {
             const receitaData = doc.data();
             const status = receitaData.status || 'Pendente';
             const dataVencimento = receitaData.dataVencimento || receitaData.vencimento;
-            // Manual filtering
             if (['Pendente', 'Vencido', 'Recebido Parcialmente'].includes(status) && dataVencimento >= startDate && dataVencimento <= endDate) {
                 const categoria = planoContasMap.get(receitaData.categoriaId);
                 unifiedProjected.push({
@@ -182,12 +168,11 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             let unifiedTransactions = [];
 
             if (showRealizado) {
-                const [pagamentos, recebimentos, transferencias] = await Promise.all([
-                    fetchTransactionsEfficiently('despesas', 'pagamentos', startDate, endDate),
-                    fetchTransactionsEfficiently('receitas', 'recebimentos', startDate, endDate),
+                const [financialMovements, transferencias] = await Promise.all([
+                    fetchFinancialLedger(db, userId, { startDate, endDate }),
                     fetchCollection('transferencias', startDate, endDate)
                 ]);
-                const realizedTransactions = await enrichAndUnifyTransactions(pagamentos, recebimentos, transferencias);
+                const realizedTransactions = await enrichAndUnifyTransactions(financialMovements, transferencias);
                 unifiedTransactions.push(...realizedTransactions);
             }
 
@@ -262,13 +247,12 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         }
 
         // 2. Get past transactions
-        const [pagamentos, recebimentos, transferencias] = await Promise.all([
-            fetchTransactionsEfficiently('despesas', 'pagamentos', null, startDate, false),
-            fetchTransactionsEfficiently('receitas', 'recebimentos', null, startDate, false),
+        const [financialMovements, transferencias] = await Promise.all([
+            fetchFinancialLedger(db, userId, { endDate: startDate, inclusive: false }),
             fetchCollection('transferencias', null, startDate, false)
         ]);
 
-        const allTransactions = await enrichAndUnifyTransactions(pagamentos, recebimentos, transferencias);
+        const allTransactions = await enrichAndUnifyTransactions(financialMovements, transferencias);
         const filteredTransactions = applyFilters(allTransactions, contaId, 'todas');
 
         // 3. Add effect of past transactions to the initial balance
@@ -299,85 +283,80 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         return snapshot.docs;
     }
 
-    async function enrichAndUnifyTransactions(pagamentos, recebimentos, transferencias) {
+    async function enrichAndUnifyTransactions(financialMovements, transferencias) {
         const unified = [];
+        const pagamentos = financialMovements.filter(movement => movement.tipo === 'pagamento');
+        const recebimentos = financialMovements.filter(movement => movement.tipo === 'recebimento');
+
+        const [despesasById, receitasById, planoContasSnap] = await Promise.all([
+            fetchDocumentsByIds(db, userId, 'despesas', pagamentos.map(movement => movement.origemParentId)),
+            fetchDocumentsByIds(db, userId, 'receitas', recebimentos.map(movement => movement.origemParentId)),
+            getDocs(collection(db, `users/${userId}/planosDeContas`))
+        ]);
+
         const planoContasMap = new Map();
-        const planoContasSnap = await getDocs(collection(db, `users/${userId}/planosDeContas`));
-        planoContasSnap.forEach(doc => {
-            planoContasMap.set(doc.id, doc.data());
-        });
+        planoContasSnap.forEach(snapshotDoc => planoContasMap.set(snapshotDoc.id, snapshotDoc.data()));
 
-        for (const doc of pagamentos) {
-            const data = doc.data();
-            if (data.estornado === true || data.tipoTransacao === 'Estorno') continue;
-            const parentDespesaRef = doc.ref.parent.parent;
-            if (parentDespesaRef) {
-                const despesaSnap = await getDoc(parentDespesaRef);
-                if (despesaSnap.exists()) {
-                    const despesaData = despesaSnap.data();
-                    const categoria = planoContasMap.get(despesaData.categoriaId);
-                    unified.push({
-                        id: doc.id,
-                        parentId: parentDespesaRef.id,
-                        data: data.dataTransacao,
-                        descricao: despesaData.descricao,
-                        participante: despesaData.favorecidoNome || 'N/A',
-                        planoDeConta: categoria ? categoria.nome : 'N/A',
-                        dataVencimento: despesaData.vencimento,
-                        tipoAtividade: categoria ? categoria.tipoDeAtividade : 'Operacional',
-                        entrada: 0,
-                        saida: data.valorPrincipal || 0,
-                        juros: data.jurosPagos || 0,
-                        desconto: data.descontosAplicados || 0,
-                        contaId: data.contaSaidaId,
-                        conciliado: data.conciliado || false,
-                        type: 'pagamento'
-                    });
-                }
-            }
-        }
-
-        for (const doc of recebimentos) {
-            const data = doc.data();
-            if (data.estornado === true || data.tipoTransacao === 'Estorno') continue;
-            const parentReceitaRef = doc.ref.parent.parent;
-             if (parentReceitaRef) {
-                const receitaSnap = await getDoc(parentReceitaRef);
-                 if (receitaSnap.exists()) {
-                    const receitaData = receitaSnap.data();
-                    const categoria = planoContasMap.get(receitaData.categoriaId);
-                    unified.push({
-                        id: doc.id,
-                        parentId: parentReceitaRef.id,
-                        data: data.dataTransacao,
-                        descricao: receitaData.descricao,
-                        participante: receitaData.clienteNome || 'N/A',
-                        planoDeConta: categoria ? categoria.nome : 'N/A',
-                        dataVencimento: receitaData.dataVencimento,
-                        tipoAtividade: categoria ? categoria.tipoDeAtividade : 'Operacional',
-                        entrada: data.valorPrincipal || 0,
-                        saida: 0,
-                        juros: data.jurosRecebidos || 0,
-                        desconto: data.descontosConcedidos || 0,
-                        contaId: data.contaEntradaId,
-                        conciliado: data.conciliado || false,
-                        type: 'recebimento'
-                    });
-                }
-            }
-        }
-
-        for (const doc of transferencias) {
-            const data = doc.data();
+        for (const movement of pagamentos) {
+            const despesaSnap = despesasById.get(movement.origemParentId);
+            if (!despesaSnap || movement.estornado === true) continue;
+            const despesaData = despesaSnap.data();
+            const categoria = planoContasMap.get(despesaData.categoriaId);
             unified.push({
-                id: doc.id,
+                id: movement.origemId || movement.id,
+                parentId: movement.origemParentId,
+                data: movement.dataTransacao,
+                descricao: despesaData.descricao,
+                participante: despesaData.favorecidoNome || 'N/A',
+                planoDeConta: categoria ? categoria.nome : 'N/A',
+                dataVencimento: despesaData.vencimento,
+                tipoAtividade: categoria ? categoria.tipoDeAtividade : 'Operacional',
+                entrada: 0,
+                saida: movement.valorPrincipal || 0,
+                juros: movement.juros || 0,
+                desconto: movement.desconto || 0,
+                contaId: movement.contaBancariaId,
+                conciliado: movement.conciliado || false,
+                type: 'pagamento'
+            });
+        }
+
+        for (const movement of recebimentos) {
+            const receitaSnap = receitasById.get(movement.origemParentId);
+            if (!receitaSnap || movement.estornado === true) continue;
+            const receitaData = receitaSnap.data();
+            if ((receitaData.status || 'Pendente') === 'Desdobrado') continue;
+            const categoria = planoContasMap.get(receitaData.categoriaId);
+            unified.push({
+                id: movement.origemId || movement.id,
+                parentId: movement.origemParentId,
+                data: movement.dataTransacao,
+                descricao: receitaData.descricao,
+                participante: receitaData.clienteNome || 'N/A',
+                planoDeConta: categoria ? categoria.nome : 'N/A',
+                dataVencimento: receitaData.dataVencimento || receitaData.vencimento,
+                tipoAtividade: categoria ? categoria.tipoDeAtividade : 'Operacional',
+                entrada: movement.valorPrincipal || 0,
+                saida: 0,
+                juros: movement.juros || 0,
+                desconto: movement.desconto || 0,
+                contaId: movement.contaBancariaId,
+                conciliado: movement.conciliado || false,
+                type: 'recebimento'
+            });
+        }
+
+        for (const snapshotDoc of transferencias) {
+            const data = snapshotDoc.data();
+            unified.push({
+                id: snapshotDoc.id,
                 data: data.dataTransacao,
                 descricao: `Transferência de ${data.contaOrigemNome} para ${data.contaDestinoNome}`,
                 participante: 'Interno',
                 planoDeConta: 'Transferência',
-                dataVencimento: data.dataTransacao, // Vencimento é a própria data
+                dataVencimento: data.dataTransacao,
                 tipoAtividade: 'N/A',
-                valor: data.valor, // Valor único para ser tratado na renderização
+                valor: data.valor,
                 juros: 0,
                 desconto: 0,
                 contaOrigemId: data.contaOrigemId,
@@ -660,26 +639,24 @@ export function initializeFluxoDeCaixa(db, userId, common) {
 
         let runningSaldoRealizado = saldoAnterior;
         let runningSaldoProjetado = saldoAnterior;
-        let runningSaldoSimulado = includeProjections ? saldoAnterior : saldoAnterior; // Initialize based on projection inclusion
-        let runningSaldoComparado = includeProjections ? saldoAnterior : saldoAnterior; // Initialize based on projection inclusion
-
+        let runningSaldoSimulado = saldoAnterior;
+        let runningSaldoComparado = saldoAnterior;
+        let cumulativeSimulado = 0;
+        let cumulativeComparado = 0;
 
         sortedDays.forEach(day => {
             labels.push(new Date(day + 'T00:00:00').toLocaleDateString('pt-BR'));
             const changes = dailyChanges[day];
 
-            // Update the cumulative balances correctly
             runningSaldoRealizado += changes.realizado;
             runningSaldoProjetado += changes.realizado + changes.projetado;
+            cumulativeSimulado += changes.simulado;
+            cumulativeComparado += changes.comparado;
 
-            if (includeProjections) {
-                runningSaldoSimulado = runningSaldoProjetado + changes.simulado;
-                runningSaldoComparado = runningSaldoProjetado + changes.comparado;
-            } else {
-                runningSaldoSimulado = runningSaldoRealizado + changes.simulado;
-                runningSaldoComparado = runningSaldoRealizado + changes.comparado;
-            }
-
+            // The effect of a simulated transaction persists on every subsequent day.
+            const scenarioBase = includeProjections ? runningSaldoProjetado : runningSaldoRealizado;
+            runningSaldoSimulado = scenarioBase + cumulativeSimulado;
+            runningSaldoComparado = scenarioBase + cumulativeComparado;
 
             realizadoData.push(runningSaldoRealizado / 100);
             projetadoData.push(runningSaldoProjetado / 100);
@@ -863,19 +840,19 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         const prevEndDateStr = prevEndDate.toISOString().split('T')[0];
 
         try {
-            const [pagamentosAnteriores, recebimentosAnteriores] = await Promise.all([
-                fetchTransactionsEfficiently('despesas', 'pagamentos', prevStartDateStr, prevEndDateStr),
-                fetchTransactionsEfficiently('receitas', 'recebimentos', prevStartDateStr, prevEndDateStr)
-            ]);
+            const financialMovementsAnteriores = await fetchFinancialLedger(db, userId, {
+                startDate: prevStartDateStr,
+                endDate: prevEndDateStr
+            });
 
-            const transacoesAnteriores = await enrichAndUnifyTransactions(pagamentosAnteriores, recebimentosAnteriores, []);
+            const transacoesAnteriores = await enrichAndUnifyTransactions(financialMovementsAnteriores, []);
             const kpisAnteriores = calculateKPIs(0, transacoesAnteriores, 'todas');
 
-            const [pagamentosAtuais, recebimentosAtuais] = await Promise.all([
-                fetchTransactionsEfficiently('despesas', 'pagamentos', startDateStr, endDateStr),
-                fetchTransactionsEfficiently('receitas', 'recebimentos', startDateStr, endDateStr)
-            ]);
-            const transacoesAtuais = await enrichAndUnifyTransactions(pagamentosAtuais, recebimentosAtuais, []);
+            const financialMovementsAtuais = await fetchFinancialLedger(db, userId, {
+                startDate: startDateStr,
+                endDate: endDateStr
+            });
+            const transacoesAtuais = await enrichAndUnifyTransactions(financialMovementsAtuais, []);
             const kpisAtuais = calculateKPIs(0, transacoesAtuais, 'todas');
 
             const data = {
@@ -1367,7 +1344,19 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             const docRef = doc(db, `users/${userId}/${parentCollectionName}/${parentId}/${collectionName}/${transacaoId}`);
 
             try {
-                await updateDoc(docRef, { conciliado: isConciliado });
+                if (type === 'pagamento' || type === 'recebimento') {
+                    const ledgerRef = doc(
+                        db,
+                        `users/${userId}/movimentacoesFinanceiras`,
+                        financialMovementDocId(type, parentId, transacaoId)
+                    );
+                    await Promise.all([
+                        updateDoc(docRef, { conciliado: isConciliado }),
+                        updateDoc(ledgerRef, { conciliado: isConciliado })
+                    ]);
+                } else {
+                    await updateDoc(docRef, { conciliado: isConciliado });
+                }
                 const row = checkbox.closest('tr');
                 row.classList.toggle('bg-green-50', isConciliado);
             } catch (error) {

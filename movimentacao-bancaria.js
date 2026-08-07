@@ -1,4 +1,5 @@
 import { collection, query, where, onSnapshot, doc, getDoc, writeBatch, runTransaction, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { ensureFinancialLedger, financialMovementDocId } from './financial-ledger.js';
 
 // This module will be initialized from the main script
 export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName) {
@@ -224,14 +225,29 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
         const selectedIds = getSelectedMovimentacaoIds();
         if (selectedIds.length === 0) return;
 
+        await ensureFinancialLedger(db, userId);
         const batch = writeBatch(db);
         selectedIds.forEach(id => {
             const ref = doc(db, `users/${userId}/movimentacoesBancarias`, id);
-            batch.update(ref, {
+            const reconciliationData = {
                 conciliado: conciliar,
                 dataConciliacao: conciliar ? new Date().toISOString().split('T')[0] : null,
-                usuarioConciliacao: conciliar ? "currentUserName" : null // Replace with actual user name
-            });
+                usuarioConciliacao: conciliar ? currentUserName : null
+            };
+            batch.update(ref, reconciliationData);
+
+            const movement = allMovimentacoes.find(item => item.id === id);
+            const ledgerType = movement?.origemTipo === 'PAGAMENTO_DESPESA'
+                ? 'pagamento'
+                : (movement?.origemTipo === 'RECEBIMENTO_RECEITA' ? 'recebimento' : null);
+            if (ledgerType && movement.origemParentId && movement.origemId) {
+                const ledgerRef = doc(
+                    db,
+                    `users/${userId}/movimentacoesFinanceiras`,
+                    financialMovementDocId(ledgerType, movement.origemParentId, movement.origemId)
+                );
+                batch.update(ledgerRef, reconciliationData);
+            }
         });
 
         try {
@@ -261,6 +277,7 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
         const movRef = doc(db, `users/${userId}/movimentacoesBancarias`, movId);
 
         try {
+            await ensureFinancialLedger(db, userId);
             await runTransaction(db, async (transaction) => {
                 // 1. LÊ OS DOCUMENTOS NECESSÁRIOS
                 const movDoc = await transaction.get(movRef);
@@ -273,6 +290,17 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
                     transaction.delete(movRef);
                     return; // Fim da operação para lançamentos manuais
                 }
+
+                const ledgerType = movData.origemTipo === 'PAGAMENTO_DESPESA'
+                    ? 'pagamento'
+                    : (movData.origemTipo === 'RECEBIMENTO_RECEITA' ? 'recebimento' : null);
+                const financialLedgerRef = ledgerType
+                    ? doc(
+                        db,
+                        `users/${userId}/movimentacoesFinanceiras`,
+                        financialMovementDocId(ledgerType, movData.origemParentId, movData.origemId)
+                    )
+                    : null;
 
                 // Se tiver a "ponte", continua para reverter a despesa/receita
                 const parentCollection = movData.origemTipo === 'PAGAMENTO_DESPESA' ? 'despesas' : 'receitas';
@@ -296,6 +324,7 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
 
                 // Deleta a movimentação bancária da tela de conciliação
                 transaction.delete(movRef);
+                if (financialLedgerRef) transaction.delete(financialLedgerRef);
 
                 // Marca o registro de pagamento/recebimento original como estornado, em vez de deletar
                 transaction.update(origemDocRef, { estornado: true });

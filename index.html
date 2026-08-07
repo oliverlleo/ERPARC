@@ -3576,6 +3576,7 @@
     import { initializeMovimentacaoBancaria } from './movimentacao-bancaria.js';
     import { initializeNotifications, initializeNotificationsPage } from './notifications.js';
     import { initializeRelatorios } from './relatorios.js';
+    import { ensureFinancialLedger, fetchFinancialLedger, financialMovementDocId } from './financial-ledger.js';
 
     // Configuração do Firebase
     const firebaseConfig = {
@@ -4850,7 +4851,7 @@
         });
 
     // Populate user dropdown in employee form
-    const usuariosQueryForDropdown = query(collection(db, 'users', userId, 'usuarios'));
+    const usuariosQueryForDropdown = query(collection(db, 'users', userId, 'systemUsers'));
     onSnapshot(usuariosQueryForDropdown, (querySnapshot) => {
         const userSelect = document.getElementById('funcionario-usuario-sistema');
         if (userSelect) {
@@ -5134,23 +5135,28 @@
         try {
             if (!effectiveUserId) return;
 
+            await ensureFinancialLedger(db, effectiveUserId);
+
             const despesasQuery = query(collection(db, 'users', effectiveUserId, 'despesas'));
             const receitasQuery = query(collection(db, 'users', effectiveUserId, 'receitas'));
             const contasBancariasQuery = query(collection(db, 'users', effectiveUserId, 'contasBancarias'));
 
-            const [despesasSnap, receitasSnap, contasBancariasSnap] = await Promise.all([
+            const [despesasSnap, receitasSnap, contasBancariasSnap, financialMovements] = await Promise.all([
                 getDocs(despesasQuery),
                 getDocs(receitasQuery),
-                getDocs(contasBancariasQuery)
+                getDocs(contasBancariasQuery),
+                fetchFinancialLedger(db, effectiveUserId)
             ]);
 
             const allDespesas = despesasSnap.docs;
             const allReceitas = receitasSnap.docs;
             const allContasBancarias = contasBancariasSnap.docs;
+            const despesasById = new Map(allDespesas.map(snapshotDoc => [snapshotDoc.id, snapshotDoc.data()]));
+            const receitasById = new Map(allReceitas.map(snapshotDoc => [snapshotDoc.id, snapshotDoc.data()]));
 
             let totalSaldoInicial = 0;
-            allContasBancarias.forEach(doc => {
-                totalSaldoInicial += doc.data().saldoInicial || 0;
+            allContasBancarias.forEach(snapshotDoc => {
+                totalSaldoInicial += snapshotDoc.data().saldoInicial || 0;
             });
 
             const today = new Date();
@@ -5158,129 +5164,88 @@
             const currentMonth = today.getMonth();
             const currentYear = today.getFullYear();
 
-            // --- Calculation Variables ---
             let provisaoAPagar = 0, provisaoAReceber = 0;
             let pagarTotalMes = 0, pagarPagoMes = 0, pagarVencidas = 0;
             let receberTotalMes = 0, receberRecebidoMes = 0, receberVencidos = 0;
             let movSaidas = 0, movEntradas = 0;
 
-            // --- Process Despesas ---
-            const pagamentosPromises = allDespesas.map(doc => getDocs(collection(doc.ref, 'pagamentos')));
-            const pagamentosSnapshots = await Promise.all(pagamentosPromises);
-
-            allDespesas.forEach((doc, index) => {
-                const data = doc.data();
+            allDespesas.forEach(snapshotDoc => {
+                const data = snapshotDoc.data();
                 const status = data.status || 'Pendente';
                 const saldo = data.valorSaldo ?? 0;
                 const vencimentoStr = data.vencimento;
+                if (!vencimentoStr) return;
 
-                if (vencimentoStr) {
-                    const vencimento = new Date(vencimentoStr + 'T00:00:00');
-                    if (!isNaN(vencimento.getTime())) {
-                        if (status !== 'Pago') {
-                            provisaoAPagar += saldo;
-                            if (vencimento.getMonth() === currentMonth && vencimento.getFullYear() === currentYear) {
-                                pagarTotalMes += saldo;
-                            }
-                            if (vencimento < today) {
-                                pagarVencidas += saldo;
-                            }
-                        }
-                    }
+                const vencimento = new Date(vencimentoStr + 'T00:00:00');
+                if (isNaN(vencimento.getTime()) || status === 'Pago') return;
+
+                provisaoAPagar += saldo;
+                if (vencimento.getMonth() === currentMonth && vencimento.getFullYear() === currentYear) {
+                    pagarTotalMes += saldo;
                 }
-
-                pagamentosSnapshots[index].forEach(pagoDoc => {
-                    const pagoData = pagoDoc.data();
-
-                    // ADICIONE ESTA LINHA:
-                    if (pagoData.estornado === true || pagoData.tipoTransacao === 'Estorno') return;
-
-                    const transacaoDateStr = pagoData.dataTransacao;
-                    if (pagoData.tipoTransacao === 'Pagamento' && transacaoDateStr) {
-                        const transacaoDate = new Date(transacaoDateStr + 'T00:00:00');
-                        if (!isNaN(transacaoDate.getTime())) {
-                            if (transacaoDate.getMonth() === currentMonth && transacaoDate.getFullYear() === currentYear) {
-                                pagarPagoMes += pagoData.valorPrincipal || 0;
-                            }
-                            movSaidas += pagoData.valorPrincipal || 0;
-                        }
-                    }
-                });
+                if (vencimento < today) pagarVencidas += saldo;
             });
 
-            // --- Process Receitas ---
-            const recebimentosPromises = allReceitas.map(doc => getDocs(collection(doc.ref, 'recebimentos')));
-            const recebimentosSnapshots = await Promise.all(recebimentosPromises);
-
-            allReceitas.forEach((doc, index) => {
-                const data = doc.data();
+            allReceitas.forEach(snapshotDoc => {
+                const data = snapshotDoc.data();
                 const status = data.status || 'Pendente';
+                if (status === 'Desdobrado') return;
+
                 const saldo = data.saldoPendente ?? 0;
                 const vencimentoStr = data.dataVencimento || data.vencimento;
+                if (!vencimentoStr) return;
 
-                // Ignore split (desdobrado) receivables in all financial calculations
-                if (status === 'Desdobrado') {
-                    return; // Skip to the next iteration
+                const vencimento = new Date(vencimentoStr + 'T00:00:00');
+                if (isNaN(vencimento.getTime()) || status === 'Recebido') return;
+
+                provisaoAReceber += saldo;
+                if (vencimento.getMonth() === currentMonth && vencimento.getFullYear() === currentYear) {
+                    receberTotalMes += saldo;
+                }
+                if (vencimento < today) receberVencidos += saldo;
+            });
+
+            financialMovements.forEach(movement => {
+                if (!movement.dataTransacao || movement.estornado === true) return;
+                const transacaoDate = new Date(movement.dataTransacao + 'T00:00:00');
+                if (isNaN(transacaoDate.getTime())) return;
+                const valorPrincipal = movement.valorPrincipal || 0;
+
+                if (movement.tipo === 'pagamento') {
+                    if (!despesasById.has(movement.origemParentId)) return;
+                    movSaidas += valorPrincipal;
+                    if (transacaoDate.getMonth() === currentMonth && transacaoDate.getFullYear() === currentYear) {
+                        pagarPagoMes += valorPrincipal;
+                    }
+                    return;
                 }
 
-                if (vencimentoStr) {
-                    const vencimento = new Date(vencimentoStr + 'T00:00:00');
-                    if (!isNaN(vencimento.getTime())) {
-                         if (status !== 'Recebido') {
-                            provisaoAReceber += saldo;
-                            if (vencimento.getMonth() === currentMonth && vencimento.getFullYear() === currentYear) {
-                                receberTotalMes += saldo;
-                            }
-                            if (vencimento < today) {
-                                receberVencidos += saldo;
-                            }
-                        }
+                if (movement.tipo === 'recebimento') {
+                    const receita = receitasById.get(movement.origemParentId);
+                    if (!receita || (receita.status || 'Pendente') === 'Desdobrado') return;
+                    movEntradas += valorPrincipal;
+                    if (transacaoDate.getMonth() === currentMonth && transacaoDate.getFullYear() === currentYear) {
+                        receberRecebidoMes += valorPrincipal;
                     }
                 }
-
-                recebimentosSnapshots[index].forEach(recebidoDoc => {
-                    const recebidoData = recebidoDoc.data();
-
-                    // ADICIONE ESTA LINHA:
-                    if (recebidoData.estornado === true || recebidoData.tipoTransacao === 'Estorno') return;
-
-                    const transacaoDateStr = recebidoData.dataTransacao;
-                    if (recebidoData.tipoTransacao === 'Recebimento' && transacaoDateStr) {
-                        const transacaoDate = new Date(transacaoDateStr + 'T00:00:00');
-                         if (!isNaN(transacaoDate.getTime())) {
-                            if (transacaoDate.getMonth() === currentMonth && transacaoDate.getFullYear() === currentYear) {
-                               receberRecebidoMes += recebidoData.valorPrincipal || 0;
-                            }
-                            movEntradas += recebidoData.valorPrincipal || 0;
-                        }
-                    }
-                });
             });
 
             const saldoProvisao = totalSaldoInicial + provisaoAReceber - provisaoAPagar;
             const saldoMovimentacao = totalSaldoInicial + movEntradas - movSaidas;
 
-            // --- Update UI ---
             document.getElementById('dashboard-provisao-a-pagar').textContent = formatCurrency(provisaoAPagar);
             document.getElementById('dashboard-provisao-a-receber').textContent = formatCurrency(provisaoAReceber);
 
             const saldoProjetadoEl = document.getElementById('dashboard-provisao-saldo');
             saldoProjetadoEl.textContent = formatCurrency(saldoProvisao);
             saldoProjetadoEl.classList.remove('text-red-600', 'text-green-600', 'text-yellow-500', 'text-gray-900');
-
-            if (saldoProvisao > 0) {
-                saldoProjetadoEl.classList.add('text-green-600');
-            } else if (saldoProvisao < 0) {
-                saldoProjetadoEl.classList.add('text-red-600');
-            } else {
-                saldoProjetadoEl.classList.add('text-yellow-500');
-            }
+            if (saldoProvisao > 0) saldoProjetadoEl.classList.add('text-green-600');
+            else if (saldoProvisao < 0) saldoProjetadoEl.classList.add('text-red-600');
+            else saldoProjetadoEl.classList.add('text-yellow-500');
 
             document.getElementById('dashboard-pagar-total-mes').textContent = formatCurrency(pagarTotalMes);
             document.getElementById('dashboard-pagar-pago-mes').textContent = formatCurrency(pagarPagoMes);
             document.getElementById('dashboard-pagar-vencidas').textContent = formatCurrency(pagarVencidas);
-
-            // Also update the dedicated Contas a Pagar page cards
             document.getElementById('total-a-pagar-card').textContent = formatCurrency(pagarTotalMes);
             document.getElementById('total-pago-card').textContent = formatCurrency(pagarPagoMes);
             document.getElementById('contas-vencidas-card').textContent = formatCurrency(pagarVencidas);
@@ -5294,18 +5259,12 @@
             document.getElementById('dashboard-mov-entradas').textContent = formatCurrency(movEntradas);
             document.getElementById('dashboard-mov-saldo').textContent = formatCurrency(saldoMovimentacao);
 
-            // Update all "Saldo em Conta" cards using the common class
             document.querySelectorAll('.saldo-em-conta-value').forEach(card => {
                 card.textContent = formatCurrency(saldoMovimentacao);
             });
 
-            // --- Projected Balance Calculation ---
-            const saldoProjetadoPagar = saldoMovimentacao - pagarTotalMes;
-            document.getElementById('saldo-projetado-pagar-card').textContent = formatCurrency(saldoProjetadoPagar);
-
-            const saldoProjetadoReceber = saldoMovimentacao + receberTotalMes;
-            document.getElementById('saldo-projetado-receber-card').textContent = formatCurrency(saldoProjetadoReceber);
-
+            document.getElementById('saldo-projetado-pagar-card').textContent = formatCurrency(saldoMovimentacao - pagarTotalMes);
+            document.getElementById('saldo-projetado-receber-card').textContent = formatCurrency(saldoMovimentacao + receberTotalMes);
         } catch (error) {
             console.error("Error updating all dashboard views:", error);
         }
@@ -7756,6 +7715,7 @@
                 });
 
                 transaction.update(pagamentoRef, { estornado: true });
+                transaction.delete(doc(db, 'users', userId, 'movimentacoesFinanceiras', financialMovementDocId('pagamento', despesaId, pagamentoId)));
 
                 transaction.update(despesaRef, {
                     totalPago: novoTotalPago,
@@ -7889,6 +7849,31 @@
                     descontosAplicados: descontosCents,
                     contaSaidaId: contaSaidaId,
                     usuarioResponsavel: currentUserName || "N/A",
+                    createdAt: serverTimestamp()
+                });
+
+                const pagamentoLedgerRef = doc(
+                    db,
+                    'users',
+                    userId,
+                    'movimentacoesFinanceiras',
+                    financialMovementDocId('pagamento', despesaId, novoPagamentoRef.id)
+                );
+                transaction.set(pagamentoLedgerRef, {
+                    tipo: 'pagamento',
+                    origemTipo: 'PAGAMENTO_DESPESA',
+                    origemParentId: despesaId,
+                    origemId: novoPagamentoRef.id,
+                    dataTransacao,
+                    valorPrincipal: valorPrincipalCents,
+                    juros: jurosCents,
+                    desconto: descontosCents,
+                    contaBancariaId: contaSaidaId,
+                    conciliado: false,
+                    dataConciliacao: null,
+                    usuarioConciliacao: null,
+                    estornado: false,
+                    migratedFromLegacy: false,
                     createdAt: serverTimestamp()
                 });
 
@@ -8293,6 +8278,31 @@
                                 descontosConcedidos: 0,
                                 contaEntradaId: document.getElementById('recebimento-conta').value,
                                 usuarioResponsavel: currentUserName || "N/A",
+                                createdAt: serverTimestamp()
+                            });
+
+                            const initialReceiptLedgerRef = doc(
+                                db,
+                                'users',
+                                userId,
+                                'movimentacoesFinanceiras',
+                                financialMovementDocId('recebimento', newDocRef.id, recebimentoRef.id)
+                            );
+                            transaction.set(initialReceiptLedgerRef, {
+                                tipo: 'recebimento',
+                                origemTipo: 'RECEBIMENTO_RECEITA',
+                                origemParentId: newDocRef.id,
+                                origemId: recebimentoRef.id,
+                                dataTransacao: document.getElementById('recebimento-data').value,
+                                valorPrincipal: valorRecebidoCents,
+                                juros: 0,
+                                desconto: 0,
+                                contaBancariaId: document.getElementById('recebimento-conta').value,
+                                conciliado: false,
+                                dataConciliacao: null,
+                                usuarioConciliacao: null,
+                                estornado: false,
+                                migratedFromLegacy: false,
                                 createdAt: serverTimestamp()
                             });
                         }
@@ -8854,6 +8864,7 @@ function validateParcelasSum() {
                 });
 
                 transaction.update(recebimentoRef, { estornado: true });
+                transaction.delete(doc(db, 'users', userId, 'movimentacoesFinanceiras', financialMovementDocId('recebimento', receitaId, recebimentoId)));
 
                 transaction.update(receitaRef, {
                     totalRecebido: novoTotalRecebido,
@@ -9047,6 +9058,31 @@ function validateParcelasSum() {
                         descontosConcedidos: descontosCents,
                         contaEntradaId: contaEntradaId,
                         usuarioResponsavel: currentUserName || "N/A",
+                        createdAt: serverTimestamp()
+                    });
+
+                    const recebimentoLedgerRef = doc(
+                        db,
+                        'users',
+                        userId,
+                        'movimentacoesFinanceiras',
+                        financialMovementDocId('recebimento', receitaId, novoRecebimentoRef.id)
+                    );
+                    transaction.set(recebimentoLedgerRef, {
+                        tipo: 'recebimento',
+                        origemTipo: 'RECEBIMENTO_RECEITA',
+                        origemParentId: receitaId,
+                        origemId: novoRecebimentoRef.id,
+                        dataTransacao,
+                        valorPrincipal: valorPrincipalCents,
+                        juros: jurosCents,
+                        desconto: descontosCents,
+                        contaBancariaId: contaEntradaId,
+                        conciliado: false,
+                        dataConciliacao: null,
+                        usuarioConciliacao: null,
+                        estornado: false,
+                        migratedFromLegacy: false,
                         createdAt: serverTimestamp()
                     });
 
