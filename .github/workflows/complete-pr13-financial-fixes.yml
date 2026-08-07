@@ -1,0 +1,554 @@
+name: Complete PR13 financial fixes
+
+on:
+  pull_request:
+    types: [ready_for_review]
+
+permissions:
+  contents: write
+
+jobs:
+  complete-fix:
+    if: github.event.pull_request.number == 13 && github.event.pull_request.head.ref == 'fix/financial-consistency-firestore-performance'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Apply remaining fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{label}: expected exactly one occurrence, found {count}')
+              return text.replace(old, new, 1)
+
+          def insert_before_after(text, anchor, end_marker, insertion, label):
+              start = text.find(anchor)
+              if start < 0:
+                  raise RuntimeError(f'{label}: anchor not found')
+              end = text.find(end_marker, start)
+              if end < 0:
+                  raise RuntimeError(f'{label}: end marker not found')
+              return text[:end] + insertion + text[end:]
+
+          # ---------------- index.html ----------------
+          index_path = Path('index.html')
+          index = index_path.read_text(encoding='utf-8')
+
+          index = replace_once(
+              index,
+              "    import { initializeRelatorios } from './relatorios.js';",
+              "    import { initializeRelatorios } from './relatorios.js';\n    import { ensureFinancialLedger, fetchFinancialLedger, financialMovementDocId } from './financial-ledger.js';",
+              'financial ledger import'
+          )
+
+          index = replace_once(
+              index,
+              "const usuariosQueryForDropdown = query(collection(db, 'users', userId, 'usuarios'));",
+              "const usuariosQueryForDropdown = query(collection(db, 'users', userId, 'systemUsers'));",
+              'systemUsers canonical dropdown'
+          )
+
+          payment_ledger_insert = r'''
+
+                const pagamentoLedgerRef = doc(
+                    db,
+                    'users',
+                    userId,
+                    'movimentacoesFinanceiras',
+                    financialMovementDocId('pagamento', despesaId, novoPagamentoRef.id)
+                );
+                transaction.set(pagamentoLedgerRef, {
+                    tipo: 'pagamento',
+                    origemTipo: 'PAGAMENTO_DESPESA',
+                    origemParentId: despesaId,
+                    origemId: novoPagamentoRef.id,
+                    dataTransacao: dataTransacao,
+                    valorPrincipal: valorPrincipalCents,
+                    juros: jurosCents,
+                    desconto: descontosCents,
+                    contaBancariaId: contaSaidaId,
+                    conciliado: false,
+                    dataConciliacao: null,
+                    usuarioConciliacao: null,
+                    estornado: false,
+                    migratedFromLegacy: false,
+                    createdAt: serverTimestamp()
+                });
+          '''
+          index = insert_before_after(
+              index,
+              '                // 1. Create the new payment document',
+              '\n\n                // 2. Update the main expense document',
+              payment_ledger_insert,
+              'payment ledger write'
+          )
+
+          receipt_ledger_insert = r'''
+
+                    const recebimentoLedgerRef = doc(
+                        db,
+                        'users',
+                        userId,
+                        'movimentacoesFinanceiras',
+                        financialMovementDocId('recebimento', receitaId, novoRecebimentoRef.id)
+                    );
+                    transaction.set(recebimentoLedgerRef, {
+                        tipo: 'recebimento',
+                        origemTipo: 'RECEBIMENTO_RECEITA',
+                        origemParentId: receitaId,
+                        origemId: novoRecebimentoRef.id,
+                        dataTransacao: dataTransacao,
+                        valorPrincipal: valorPrincipalCents,
+                        juros: jurosCents,
+                        desconto: descontosCents,
+                        contaBancariaId: contaEntradaId,
+                        conciliado: false,
+                        dataConciliacao: null,
+                        usuarioConciliacao: null,
+                        estornado: false,
+                        migratedFromLegacy: false,
+                        createdAt: serverTimestamp()
+                    });
+          '''
+          index = insert_before_after(
+              index,
+              '                    transaction.set(novoRecebimentoRef, {',
+              '\n\n                    const updateData = {',
+              receipt_ledger_insert,
+              'receipt ledger write'
+          )
+
+          initial_receipt_anchor = "                            const recebimentoRef = doc(collection(newDocRef, 'recebimentos'));"
+          initial_receipt_start = index.find(initial_receipt_anchor)
+          if initial_receipt_start < 0:
+              raise RuntimeError('initial receipt ledger: anchor not found')
+          initial_receipt_end = index.find('\n                            });', initial_receipt_start)
+          if initial_receipt_end < 0:
+              raise RuntimeError('initial receipt ledger: transaction end not found')
+          initial_receipt_end += len('\n                            });')
+          initial_receipt_insert = r'''
+
+                            const initialReceiptLedgerRef = doc(
+                                db,
+                                'users',
+                                userId,
+                                'movimentacoesFinanceiras',
+                                financialMovementDocId('recebimento', newDocRef.id, recebimentoRef.id)
+                            );
+                            transaction.set(initialReceiptLedgerRef, {
+                                tipo: 'recebimento',
+                                origemTipo: 'RECEBIMENTO_RECEITA',
+                                origemParentId: newDocRef.id,
+                                origemId: recebimentoRef.id,
+                                dataTransacao: document.getElementById('recebimento-data').value,
+                                valorPrincipal: valorRecebidoCents,
+                                juros: 0,
+                                desconto: 0,
+                                contaBancariaId: document.getElementById('recebimento-conta').value,
+                                conciliado: false,
+                                dataConciliacao: null,
+                                usuarioConciliacao: null,
+                                estornado: false,
+                                migratedFromLegacy: false,
+                                createdAt: serverTimestamp()
+                            });
+          '''
+          index = index[:initial_receipt_end] + initial_receipt_insert + index[initial_receipt_end:]
+
+          index = replace_once(
+              index,
+              "                transaction.update(pagamentoRef, { estornado: true });",
+              "                transaction.update(pagamentoRef, { estornado: true });\n                transaction.delete(doc(\n                    db,\n                    'users',\n                    userId,\n                    'movimentacoesFinanceiras',\n                    financialMovementDocId('pagamento', despesaId, pagamentoId)\n                ));",
+              'payment reversal ledger removal'
+          )
+
+          index = replace_once(
+              index,
+              "                transaction.update(recebimentoRef, { estornado: true });",
+              "                transaction.update(recebimentoRef, { estornado: true });\n                transaction.delete(doc(\n                    db,\n                    'users',\n                    userId,\n                    'movimentacoesFinanceiras',\n                    financialMovementDocId('recebimento', receitaId, recebimentoId)\n                ));",
+              'receipt reversal ledger removal'
+          )
+
+          dashboard_start = index.find('    async function updateAllDashboardViews() {')
+          dashboard_end_marker = '\n\n    function processAndRenderReceberCalendarEvents(docs) {'
+          dashboard_end = index.find(dashboard_end_marker, dashboard_start)
+          if dashboard_start < 0 or dashboard_end < 0:
+              raise RuntimeError('dashboard function boundaries not found')
+
+          dashboard_replacement = r'''    async function updateAllDashboardViews() {
+        try {
+            if (!effectiveUserId) return;
+
+            // The ledger migration is idempotent and runs only once for legacy tenants.
+            // After the marker exists, dashboard reads are a fixed set of collection queries.
+            await ensureFinancialLedger(db, effectiveUserId);
+
+            const despesasQuery = query(collection(db, 'users', effectiveUserId, 'despesas'));
+            const receitasQuery = query(collection(db, 'users', effectiveUserId, 'receitas'));
+            const contasBancariasQuery = query(collection(db, 'users', effectiveUserId, 'contasBancarias'));
+
+            const [despesasSnap, receitasSnap, contasBancariasSnap, financialMovements] = await Promise.all([
+                getDocs(despesasQuery),
+                getDocs(receitasQuery),
+                getDocs(contasBancariasQuery),
+                fetchFinancialLedger(db, effectiveUserId)
+            ]);
+
+            const allDespesas = despesasSnap.docs;
+            const allReceitas = receitasSnap.docs;
+            const allContasBancarias = contasBancariasSnap.docs;
+            const despesasById = new Map(allDespesas.map(snapshotDoc => [snapshotDoc.id, snapshotDoc.data()]));
+            const receitasById = new Map(allReceitas.map(snapshotDoc => [snapshotDoc.id, snapshotDoc.data()]));
+
+            let totalSaldoInicial = 0;
+            allContasBancarias.forEach(snapshotDoc => {
+                totalSaldoInicial += snapshotDoc.data().saldoInicial || 0;
+            });
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const currentMonth = today.getMonth();
+            const currentYear = today.getFullYear();
+
+            let provisaoAPagar = 0, provisaoAReceber = 0;
+            let pagarTotalMes = 0, pagarPagoMes = 0, pagarVencidas = 0;
+            let receberTotalMes = 0, receberRecebidoMes = 0, receberVencidos = 0;
+            let movSaidas = 0, movEntradas = 0;
+
+            allDespesas.forEach(snapshotDoc => {
+                const data = snapshotDoc.data();
+                const status = data.status || 'Pendente';
+                const saldo = data.valorSaldo ?? 0;
+                const vencimentoStr = data.vencimento;
+
+                if (!vencimentoStr) return;
+                const vencimento = new Date(vencimentoStr + 'T00:00:00');
+                if (isNaN(vencimento.getTime()) || status === 'Pago') return;
+
+                provisaoAPagar += saldo;
+                if (vencimento.getMonth() === currentMonth && vencimento.getFullYear() === currentYear) {
+                    pagarTotalMes += saldo;
+                }
+                if (vencimento < today) pagarVencidas += saldo;
+            });
+
+            allReceitas.forEach(snapshotDoc => {
+                const data = snapshotDoc.data();
+                const status = data.status || 'Pendente';
+                if (status === 'Desdobrado') return;
+
+                const saldo = data.saldoPendente ?? 0;
+                const vencimentoStr = data.dataVencimento || data.vencimento;
+                if (!vencimentoStr) return;
+
+                const vencimento = new Date(vencimentoStr + 'T00:00:00');
+                if (isNaN(vencimento.getTime()) || status === 'Recebido') return;
+
+                provisaoAReceber += saldo;
+                if (vencimento.getMonth() === currentMonth && vencimento.getFullYear() === currentYear) {
+                    receberTotalMes += saldo;
+                }
+                if (vencimento < today) receberVencidos += saldo;
+            });
+
+            // Realized values now come from one consolidated ledger instead of
+            // one pagamentos/recebimentos subcollection read per title.
+            financialMovements.forEach(movement => {
+                if (!movement.dataTransacao || movement.estornado === true) return;
+                const transacaoDate = new Date(movement.dataTransacao + 'T00:00:00');
+                if (isNaN(transacaoDate.getTime())) return;
+                const valorPrincipal = movement.valorPrincipal || 0;
+
+                if (movement.tipo === 'pagamento') {
+                    if (!despesasById.has(movement.origemParentId)) return;
+                    movSaidas += valorPrincipal;
+                    if (transacaoDate.getMonth() === currentMonth && transacaoDate.getFullYear() === currentYear) {
+                        pagarPagoMes += valorPrincipal;
+                    }
+                    return;
+                }
+
+                if (movement.tipo === 'recebimento') {
+                    const receita = receitasById.get(movement.origemParentId);
+                    if (!receita || (receita.status || 'Pendente') === 'Desdobrado') return;
+                    movEntradas += valorPrincipal;
+                    if (transacaoDate.getMonth() === currentMonth && transacaoDate.getFullYear() === currentYear) {
+                        receberRecebidoMes += valorPrincipal;
+                    }
+                }
+            });
+
+            const saldoProvisao = totalSaldoInicial + provisaoAReceber - provisaoAPagar;
+            const saldoMovimentacao = totalSaldoInicial + movEntradas - movSaidas;
+
+            document.getElementById('dashboard-provisao-a-pagar').textContent = formatCurrency(provisaoAPagar);
+            document.getElementById('dashboard-provisao-a-receber').textContent = formatCurrency(provisaoAReceber);
+
+            const saldoProjetadoEl = document.getElementById('dashboard-provisao-saldo');
+            saldoProjetadoEl.textContent = formatCurrency(saldoProvisao);
+            saldoProjetadoEl.classList.remove('text-red-600', 'text-green-600', 'text-yellow-500', 'text-gray-900');
+
+            if (saldoProvisao > 0) {
+                saldoProjetadoEl.classList.add('text-green-600');
+            } else if (saldoProvisao < 0) {
+                saldoProjetadoEl.classList.add('text-red-600');
+            } else {
+                saldoProjetadoEl.classList.add('text-yellow-500');
+            }
+
+            document.getElementById('dashboard-pagar-total-mes').textContent = formatCurrency(pagarTotalMes);
+            document.getElementById('dashboard-pagar-pago-mes').textContent = formatCurrency(pagarPagoMes);
+            document.getElementById('dashboard-pagar-vencidas').textContent = formatCurrency(pagarVencidas);
+            document.getElementById('total-a-pagar-card').textContent = formatCurrency(pagarTotalMes);
+            document.getElementById('total-pago-card').textContent = formatCurrency(pagarPagoMes);
+            document.getElementById('contas-vencidas-card').textContent = formatCurrency(pagarVencidas);
+            document.getElementById('dashboard-receber-total-mes').textContent = formatCurrency(receberTotalMes);
+            document.getElementById('dashboard-receber-recebido-mes').textContent = formatCurrency(receberRecebidoMes);
+            document.getElementById('dashboard-receber-vencidos').textContent = formatCurrency(receberVencidos);
+            document.getElementById('total-a-receber-card').textContent = formatCurrency(receberTotalMes);
+            document.getElementById('total-recebido-card').textContent = formatCurrency(receberRecebidoMes);
+            document.getElementById('titulos-vencidos-card').textContent = formatCurrency(receberVencidos);
+            document.getElementById('dashboard-mov-saidas').textContent = formatCurrency(movSaidas);
+            document.getElementById('dashboard-mov-entradas').textContent = formatCurrency(movEntradas);
+            document.getElementById('dashboard-mov-saldo').textContent = formatCurrency(saldoMovimentacao);
+
+            document.querySelectorAll('.saldo-em-conta-value').forEach(card => {
+                card.textContent = formatCurrency(saldoMovimentacao);
+            });
+
+            const saldoProjetadoPagar = saldoMovimentacao - pagarTotalMes;
+            document.getElementById('saldo-projetado-pagar-card').textContent = formatCurrency(saldoProjetadoPagar);
+
+            const saldoProjetadoReceber = saldoMovimentacao + receberTotalMes;
+            document.getElementById('saldo-projetado-receber-card').textContent = formatCurrency(saldoProjetadoReceber);
+
+        } catch (error) {
+            console.error("Error updating all dashboard views:", error);
+        }
+    }'''
+          index = index[:dashboard_start] + dashboard_replacement + index[dashboard_end:]
+          index_path.write_text(index, encoding='utf-8')
+
+          # ---------------- notifications.js ----------------
+          notifications_path = Path('notifications.js')
+          notifications = notifications_path.read_text(encoding='utf-8')
+          bridge_start = notifications.find('/**\n * Keeps the employee/system-user association dropdown')
+          bridge_end = notifications.find('/**\n * Checks if a specific notification already exists', bridge_start)
+          if bridge_start < 0 or bridge_end < 0:
+              raise RuntimeError('systemUsers compatibility bridge boundaries not found')
+          notifications = notifications[:bridge_start] + notifications[bridge_end:]
+          notifications = replace_once(
+              notifications,
+              '    syncSystemUsersDropdown(db, userId);\n',
+              '',
+              'remove compatibility bridge invocation'
+          )
+          notifications_path.write_text(notifications, encoding='utf-8')
+
+          # ---------------- fluxo-de-caixa.js ----------------
+          fluxo_path = Path('fluxo-de-caixa.js')
+          fluxo = fluxo_path.read_text(encoding='utf-8')
+          first_line_end = fluxo.find('\n')
+          fluxo = fluxo[:first_line_end + 1] + "import { ensureFinancialLedger, fetchFinancialLedger, fetchDocumentsByIds } from './financial-ledger.js';\n" + fluxo[first_line_end + 1:]
+
+          fetch_start = fluxo.find('    async function fetchTransactionsEfficiently(')
+          fetch_end = fluxo.find('    async function fetchProjectedTransactions(', fetch_start)
+          if fetch_start < 0 or fetch_end < 0:
+              raise RuntimeError('legacy transaction fetch boundaries not found')
+          fluxo = fluxo[:fetch_start] + fluxo[fetch_end:]
+
+          old_realized = '''                const [pagamentos, recebimentos, transferencias] = await Promise.all([\n                    fetchTransactionsEfficiently('despesas', 'pagamentos', startDate, endDate),\n                    fetchTransactionsEfficiently('receitas', 'recebimentos', startDate, endDate),\n                    fetchCollection('transferencias', startDate, endDate)\n                ]);\n                const realizedTransactions = await enrichAndUnifyTransactions(pagamentos, recebimentos, transferencias);'''
+          new_realized = '''                const [financialMovements, transferencias] = await Promise.all([\n                    fetchFinancialLedger(db, userId, { startDate, endDate }),\n                    fetchCollection('transferencias', startDate, endDate)\n                ]);\n                const realizedTransactions = await enrichAndUnifyTransactions(financialMovements, transferencias);'''
+          fluxo = replace_once(fluxo, old_realized, new_realized, 'cash flow realized ledger read')
+
+          old_past = '''        const [pagamentos, recebimentos, transferencias] = await Promise.all([\n            fetchTransactionsEfficiently('despesas', 'pagamentos', null, startDate, false),\n            fetchTransactionsEfficiently('receitas', 'recebimentos', null, startDate, false),\n            fetchCollection('transferencias', null, startDate, false)\n        ]);\n\n        const allTransactions = await enrichAndUnifyTransactions(pagamentos, recebimentos, transferencias);'''
+          new_past = '''        const [financialMovements, transferencias] = await Promise.all([\n            fetchFinancialLedger(db, userId, { endDate: startDate, inclusive: false }),\n            fetchCollection('transferencias', null, startDate, false)\n        ]);\n\n        const allTransactions = await enrichAndUnifyTransactions(financialMovements, transferencias);'''
+          fluxo = replace_once(fluxo, old_past, new_past, 'cash flow previous balance ledger read')
+
+          enrich_start = fluxo.find('    async function enrichAndUnifyTransactions(')
+          enrich_end = fluxo.find('    function applyFilters(transactions, contaId, conciliacaoStatus) {', enrich_start)
+          if enrich_start < 0 or enrich_end < 0:
+              raise RuntimeError('enrichment function boundaries not found')
+
+          enrich_replacement = r'''    async function enrichAndUnifyTransactions(financialMovements, transferencias) {
+        const unified = [];
+        const pagamentos = financialMovements.filter(movement => movement.tipo === 'pagamento');
+        const recebimentos = financialMovements.filter(movement => movement.tipo === 'recebimento');
+
+        const [despesasById, receitasById, planoContasSnap] = await Promise.all([
+            fetchDocumentsByIds(db, userId, 'despesas', pagamentos.map(movement => movement.origemParentId)),
+            fetchDocumentsByIds(db, userId, 'receitas', recebimentos.map(movement => movement.origemParentId)),
+            getDocs(collection(db, `users/${userId}/planosDeContas`))
+        ]);
+
+        const planoContasMap = new Map();
+        planoContasSnap.forEach(snapshotDoc => {
+            planoContasMap.set(snapshotDoc.id, snapshotDoc.data());
+        });
+
+        for (const movement of pagamentos) {
+            const despesaSnap = despesasById.get(movement.origemParentId);
+            if (!despesaSnap || movement.estornado === true) continue;
+
+            const despesaData = despesaSnap.data();
+            const categoria = planoContasMap.get(despesaData.categoriaId);
+            unified.push({
+                id: movement.origemId || movement.id,
+                parentId: movement.origemParentId,
+                data: movement.dataTransacao,
+                descricao: despesaData.descricao,
+                participante: despesaData.favorecidoNome || 'N/A',
+                planoDeConta: categoria ? categoria.nome : 'N/A',
+                dataVencimento: despesaData.vencimento,
+                tipoAtividade: categoria ? categoria.tipoDeAtividade : 'Operacional',
+                entrada: 0,
+                saida: movement.valorPrincipal || 0,
+                juros: movement.juros || 0,
+                desconto: movement.desconto || 0,
+                contaId: movement.contaBancariaId,
+                conciliado: movement.conciliado || false,
+                type: 'pagamento'
+            });
+        }
+
+        for (const movement of recebimentos) {
+            const receitaSnap = receitasById.get(movement.origemParentId);
+            if (!receitaSnap || movement.estornado === true) continue;
+
+            const receitaData = receitaSnap.data();
+            const categoria = planoContasMap.get(receitaData.categoriaId);
+            unified.push({
+                id: movement.origemId || movement.id,
+                parentId: movement.origemParentId,
+                data: movement.dataTransacao,
+                descricao: receitaData.descricao,
+                participante: receitaData.clienteNome || 'N/A',
+                planoDeConta: categoria ? categoria.nome : 'N/A',
+                dataVencimento: receitaData.dataVencimento || receitaData.vencimento,
+                tipoAtividade: categoria ? categoria.tipoDeAtividade : 'Operacional',
+                entrada: movement.valorPrincipal || 0,
+                saida: 0,
+                juros: movement.juros || 0,
+                desconto: movement.desconto || 0,
+                contaId: movement.contaBancariaId,
+                conciliado: movement.conciliado || false,
+                type: 'recebimento'
+            });
+        }
+
+        for (const snapshotDoc of transferencias) {
+            const data = snapshotDoc.data();
+            unified.push({
+                id: snapshotDoc.id,
+                data: data.dataTransacao,
+                descricao: `Transferência de ${data.contaOrigemNome} para ${data.contaDestinoNome}`,
+                participante: 'Interno',
+                planoDeConta: 'Transferência',
+                dataVencimento: data.dataTransacao,
+                tipoAtividade: 'N/A',
+                valor: data.valor,
+                juros: 0,
+                desconto: 0,
+                contaOrigemId: data.contaOrigemId,
+                contaDestinoId: data.contaDestinoId,
+                conciliado: data.conciliado || false,
+                type: 'transferencia'
+            });
+        }
+
+        return unified.sort((a, b) => new Date(a.data) - new Date(b.data));
+    }
+
+'''
+          fluxo = fluxo[:enrich_start] + enrich_replacement + fluxo[enrich_end:]
+          fluxo_path.write_text(fluxo, encoding='utf-8')
+
+          # ---------------- movimentacao-bancaria.js ----------------
+          mov_path = Path('movimentacao-bancaria.js')
+          mov = mov_path.read_text(encoding='utf-8')
+          first_line_end = mov.find('\n')
+          mov = mov[:first_line_end + 1] + "import { ensureFinancialLedger, financialMovementDocId } from './financial-ledger.js';\n" + mov[first_line_end + 1:]
+
+          mov = replace_once(
+              mov,
+              "        if (selectedIds.length === 0) return;\n\n        const batch = writeBatch(db);",
+              "        if (selectedIds.length === 0) return;\n\n        await ensureFinancialLedger(db, userId);\n        const batch = writeBatch(db);",
+              'conciliation migration guard'
+          )
+
+          old_batch_update = '''            batch.update(ref, {\n                conciliado: conciliar,\n                dataConciliacao: conciliar ? new Date().toISOString().split('T')[0] : null,\n                usuarioConciliacao: conciliar ? currentUserName : null\n            });'''
+          new_batch_update = '''            const reconciliationData = {\n                conciliado: conciliar,\n                dataConciliacao: conciliar ? new Date().toISOString().split('T')[0] : null,\n                usuarioConciliacao: conciliar ? currentUserName : null\n            };\n            batch.update(ref, reconciliationData);\n\n            const movement = allMovimentacoes.find(item => item.id === id);\n            const ledgerType = movement?.origemTipo === 'PAGAMENTO_DESPESA'\n                ? 'pagamento'\n                : (movement?.origemTipo === 'RECEBIMENTO_RECEITA' ? 'recebimento' : null);\n            if (ledgerType && movement.origemParentId && movement.origemId) {\n                const ledgerRef = doc(\n                    db,\n                    `users/${userId}/movimentacoesFinanceiras`,\n                    financialMovementDocId(ledgerType, movement.origemParentId, movement.origemId)\n                );\n                batch.update(ledgerRef, reconciliationData);\n            }'''
+          mov = replace_once(mov, old_batch_update, new_batch_update, 'conciliation ledger sync')
+
+          mov = replace_once(
+              mov,
+              '        try {\n            await runTransaction(db, async (transaction) => {',
+              '        try {\n            await ensureFinancialLedger(db, userId);\n            await runTransaction(db, async (transaction) => {',
+              'reversal migration guard'
+          )
+
+          manual_guard = '''                if (!movData.origemParentId || !movData.origemId || !movData.origemTipo.includes('_')) {\n                    transaction.delete(movRef);\n                    return; // Fim da operação para lançamentos manuais\n                }'''
+          ledger_guard = manual_guard + '''\n\n                const ledgerType = movData.origemTipo === 'PAGAMENTO_DESPESA'\n                    ? 'pagamento'\n                    : (movData.origemTipo === 'RECEBIMENTO_RECEITA' ? 'recebimento' : null);\n                const financialLedgerRef = ledgerType\n                    ? doc(\n                        db,\n                        `users/${userId}/movimentacoesFinanceiras`,\n                        financialMovementDocId(ledgerType, movData.origemParentId, movData.origemId)\n                    )\n                    : null;'''
+          mov = replace_once(mov, manual_guard, ledger_guard, 'reversal ledger reference')
+
+          mov = replace_once(
+              mov,
+              '                // Deleta a movimentação bancária da tela de conciliação\n                transaction.delete(movRef);',
+              '                // Deleta a movimentação bancária da tela de conciliação\n                transaction.delete(movRef);\n                if (financialLedgerRef) transaction.delete(financialLedgerRef);',
+              'reversal ledger deletion'
+          )
+          mov_path.write_text(mov, encoding='utf-8')
+          PY
+
+      - name: Validate JavaScript and architecture
+        shell: bash
+        run: |
+          node --check financial-ledger.js
+          node --check fluxo-de-caixa.js
+          node --check movimentacao-bancaria.js
+          node --check notifications.js
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          html = Path('index.html').read_text(encoding='utf-8')
+          fluxo = Path('fluxo-de-caixa.js').read_text(encoding='utf-8')
+          notifications = Path('notifications.js').read_text(encoding='utf-8')
+          mov = Path('movimentacao-bancaria.js').read_text(encoding='utf-8')
+
+          assert "allDespesas.map(doc => getDocs(collection(doc.ref, 'pagamentos')))" not in html
+          assert "allReceitas.map(doc => getDocs(collection(doc.ref, 'recebimentos')))" not in html
+          assert "fetchTransactionsEfficiently" not in fluxo
+          assert "fetchFinancialLedger(db, userId" in fluxo
+          assert "collection(db, 'users', userId, 'systemUsers')" in html
+          assert "collection(db, 'users', userId, 'usuarios')" not in html
+          assert "syncSystemUsersDropdown" not in notifications
+          assert "movimentacoesFinanceiras" in html
+          assert "movimentacoesFinanceiras" in mov
+
+          scripts = re.findall(r'<script type="module">(.*?)</script>', html, flags=re.S)
+          main_script = next((script for script in scripts if 'Importações do Firebase SDK' in script), None)
+          if not main_script:
+              raise RuntimeError('main inline module not found')
+          Path('/tmp/index-main.mjs').write_text(main_script, encoding='utf-8')
+          PY
+          node --check /tmp/index-main.mjs
+
+      - name: Commit completed fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html fluxo-de-caixa.js movimentacao-bancaria.js notifications.js
+          git diff --cached --check
+          git commit -m "complete financial ledger and dashboard optimization"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
