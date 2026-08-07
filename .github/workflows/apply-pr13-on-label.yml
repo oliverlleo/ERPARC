@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0
 
       - name: Apply deterministic patch
-        run: python3 scripts/apply-pr13-complete-fix.py
+        run: python3 scripts/run-pr13-complete-fix.py
 
       - name: Validate source
         shell: bash
