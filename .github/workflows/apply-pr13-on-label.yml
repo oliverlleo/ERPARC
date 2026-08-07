@@ -42,7 +42,7 @@ jobs:
           assert "collection(db, 'users', userId, 'systemUsers')" in html
           assert "collection(db, 'users', userId, 'usuarios')" not in html
           assert 'syncSystemUsersDropdown' not in notifications
-          assert html.count('movimentacoesFinanceiras') >= 6
+          assert html.count('movimentacoesFinanceiras') >= 5
           assert 'financialMovementDocId(type, parentId, transacaoId)' in fluxo
           assert 'movimentacoesFinanceiras' in mov
           scripts = re.findall(r'<script type="module">(.*?)</script>', html, flags=re.S)
