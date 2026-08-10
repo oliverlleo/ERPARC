@@ -1,4 +1,4 @@
-name: Apply security hardening
+name: Finalize security hardening
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   harden:
-    if: github.event.pull_request.number == 14 && github.event.label.name == 'apply-security-hardening'
+    if: github.event.pull_request.number == 14 && github.event.label.name == 'finalize-security-hardening'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,8 +17,8 @@ jobs:
           ref: fix/security-auth-reporting-hardening-v2
           fetch-depth: 0
 
-      - name: Apply deterministic hardening patch
-        run: python3 scripts/apply-security-hardening.py
+      - name: Apply final review patch
+        run: python3 scripts/finalize-security-hardening.py
 
       - name: Validate hardened source
         shell: bash
@@ -30,6 +30,7 @@ jobs:
           node --check movimentacao-bancaria.js
           node --check notifications.js
           node --check relatorios.js
+          python3 -m json.tool firebase.json >/dev/null
           python3 - <<'PY'
           from pathlib import Path
           import re
@@ -42,40 +43,56 @@ jobs:
           fluxo = Path('fluxo-de-caixa.js').read_text(encoding='utf-8')
           bank = Path('movimentacao-bancaria.js').read_text(encoding='utf-8')
 
-          forbidden = [
-              'sessionStorage',
-              'test.user@email.com',
-              'window.IS_TEST_RUN',
-              'where("senha"',
-              "where('senha'",
-              'data-password=',
-              '>Ver Senha<',
-              'senha: newPassword'
+          forbidden_auth = [
+              'sessionStorage', 'test.user@email.com', 'window.IS_TEST_RUN',
+              'where("senha"', "where('senha'", 'data-password=', '>Ver Senha<',
+              'senha: newPassword', 'Math.random('
           ]
-          for token in forbidden:
-              assert token not in html, f'forbidden legacy auth token remains: {token}'
+          for token in forbidden_auth:
+              assert token not in html, f'legacy auth pattern remains in index.html: {token}'
 
+          assert 'assertLoginAvailable' in auth
+          assert "error.code = 'company-auth/login-in-use'" in auth
+          assert auth.count('await assertLoginAvailable(') >= 3
+          assert 'crypto.getRandomValues' in auth
+          assert 'senha: deleteField()' in auth
           assert 'signInCompanyUser({ auth, db' in html
           assert 'migrateLegacyCompanyAccesses({ db, firebaseConfig' in html
           assert 'getCompanyAccessProfile(db, user.uid)' in html
           assert 'createCompanyAccess({' in html
           assert 'disableCompanyAccess({ db, accessId: id })' in html
-          assert 'generateSecureRandomPassword' in html
-          assert 'crypto.getRandomValues' in auth
-          assert 'senha: deleteField()' in auth
-          assert "const intervalId = setInterval" in notifications
+
+          assert 'activeNotificationPageCleanup' in notifications
+          assert "document.removeEventListener('view-shown', viewShownHandler)" in notifications
+          assert "removeEventListener('input', filterHandler)" in notifications
           assert 'clearInterval(intervalId)' in notifications
           assert 'unsubscribeSnapshot()' in notifications
           assert 'escapeHtml(notification.message)' in notifications
           assert 'safeMaterialIcon(notification.icon)' in notifications
+
           assert 'const contasPorId = new Map' in reports
           assert "lancamento.codigoPlanoDeContas || contasPorId.get(lancamento.categoriaId)?.codigo" in reports
           assert 'escapeHtml(node.nome)' in reports
           assert 'escapeHtml(t.descricao)' in fluxo
           assert 'escapeHtml(mov.descricao' in bank
+
+          # Values identified in the full innerHTML review must not appear raw.
+          risky_raw = [
+              '<span>${accountName}</span>',
+              "${data.numeroDocumento || ''}</td>",
+              '${formaPagamentoText}</td>',
+              '>${statusText}</span>',
+              '${mov.descricao}</td>',
+              "${mov.origemDescricao || 'N/A'}</a>",
+              'value="Ref. Título ${originalReceitaData.numeroDocumento'
+          ]
+          for token in risky_raw:
+              assert token not in html, f'unescaped dynamic HTML remains: {token}'
+
           assert 'allow list: if false;' in rules
           assert 'tenantMember(userId)' in rules
           assert 'allow read, write: if false;' in rules
+          assert rules.count('{') == rules.count('}'), 'unbalanced Firestore rules braces'
 
           scripts = re.findall(r'<script type="module">(.*?)</script>', html, flags=re.S)
           main_script = next((s for s in scripts if 'Importações do Firebase SDK' in s), None)
@@ -86,12 +103,12 @@ jobs:
           node --check /tmp/index-main.mjs
           git diff --check
 
-      - name: Commit hardened source
+      - name: Commit final reviewed source
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html notifications.js relatorios.js movimentacao-bancaria.js fluxo-de-caixa.js
+          git add auth-company.js notifications.js index.html
           git diff --cached --quiet && exit 0
-          git commit -m "apply auth security and reporting hardening"
+          git commit -m "finish security hardening review"
           git push origin HEAD:fix/security-auth-reporting-hardening-v2
