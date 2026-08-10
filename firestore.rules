@@ -31,10 +31,14 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
+      // The administrator profile/root document stays administrator-only.
       allow read, create, update: if primaryAdmin(userId);
       allow delete: if false;
 
-      match /{document=**} {
+      // Require at least one subcollection segment before the recursive wildcard.
+      // In rules v2, /{document=**} can match zero segments, which would otherwise
+      // also grant company users access to the administrator's root user document.
+      match /{subcollection}/{document=**} {
         allow read, write: if tenantMember(userId);
       }
     }
