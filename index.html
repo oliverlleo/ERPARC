@@ -3574,9 +3574,11 @@
     import { getFirestore, doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc, query, where, getDocs, getDoc, updateDoc, runTransaction, writeBatch, collectionGroup, orderBy, limit, setDoc } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
     import { initializeFluxoDeCaixa } from './fluxo-de-caixa.js';
     import { initializeMovimentacaoBancaria } from './movimentacao-bancaria.js';
-    import { initializeNotifications, initializeNotificationsPage } from './notifications.js';
+    import { initializeNotifications, initializeNotificationsPage, cleanupNotifications } from './notifications.js';
     import { initializeRelatorios } from './relatorios.js';
     import { ensureFinancialLedger, fetchFinancialLedger, financialMovementDocId } from './financial-ledger.js';
+    import { createCompanyAccess, updateCompanyAccessLogin, disableCompanyAccess, migrateLegacyCompanyAccesses, signInCompanyUser, getCompanyAccessProfile, completeCompanyFirstAccess, generateSecureRandomPassword, generateSecureCompanyCode, isCompanyAuthEmail } from './auth-company.js';
+    import { escapeHtml } from './security-utils.js';
 
     // Configuração do Firebase
     const firebaseConfig = {
@@ -3655,6 +3657,7 @@
     // --- Variáveis de estado ---
     let currentUserName = null; // To store the logged-in user's name
     let effectiveUserId = null; // To store the UID for data operations (admin's UID)
+    let currentCompanyProfile = null;
     let notificationsUnsubscribe = null;
     let dashboardUnsubscribe = null;
     let empresasUnsubscribe = null;
@@ -4114,23 +4117,11 @@
     }
 
     function generateRandomPassword(length = 10, numeric = false) {
-        const charset = numeric
-            ? "0123456789"
-            : "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()";
-        let password = "";
-        for (let i = 0, n = charset.length; i < length; ++i) {
-            password += charset.charAt(Math.floor(Math.random() * n));
-        }
-        return password;
+        return generateSecureRandomPassword(length, numeric);
     }
 
     function generateCompanyCode(length = 6) {
-        const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        let code = "EMP-";
-        for (let i = 0, n = charset.length; i < length; ++i) {
-            code += charset.charAt(Math.floor(Math.random() * n));
-        }
-        return code;
+        return generateSecureCompanyCode(length);
     }
 
     // --- Lógica de Geração de Número de Documento ---
@@ -4183,7 +4174,7 @@
             actionTd.className = 'px-6 py-4 whitespace-nowrap text-right text-sm font-medium';
             actionTd.innerHTML = `
                 <button class="text-indigo-600 hover:text-indigo-900 mr-4">Editar</button>
-                <button class="delete-btn text-red-600 hover:text-red-900" data-id="${doc.id}">Excluir</button>
+                <button class="delete-btn text-red-600 hover:text-red-900" data-id="${escapeHtml(doc.id)}">Excluir</button>
             `;
         });
 
@@ -4252,9 +4243,6 @@
     }
 
     function setupListeners(userId) {
-        if (!userId && window.IS_TEST_RUN) {
-            userId = 'test-user-123';
-        }
         if (!userId) return;
 
         initializeChartOfAccounts(userId);
@@ -4276,12 +4264,12 @@
                         const tr = empresasTableBody.insertRow();
                         tr.setAttribute('data-id', doc.id);
                         tr.innerHTML = `
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${data.nome}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${data.cnpj}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">${data.codigo}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.nome)}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.cnpj)}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">${escapeHtml(data.codigo)}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button class="edit-empresa-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                                <button class="delete-btn text-red-600 hover:text-red-900" data-id="${doc.id}">Excluir</button>
+                                <button class="edit-empresa-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                                <button class="delete-btn text-red-600 hover:text-red-900" data-id="${escapeHtml(doc.id)}">Excluir</button>
                             </td>
                         `;
                     });
@@ -4328,10 +4316,10 @@
                     const tr = usuariosTableBody.insertRow();
                     tr.setAttribute('data-id', doc.id);
                     tr.innerHTML = `
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${data.nome}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.nome)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button class="edit-usuario-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                            <button class="delete-btn text-red-600 hover:text-red-900" data-collection="systemUsers" data-id="${doc.id}">Excluir</button>
+                            <button class="edit-usuario-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                            <button class="delete-btn text-red-600 hover:text-red-900" data-collection="systemUsers" data-id="${escapeHtml(doc.id)}">Excluir</button>
                         </td>
                     `;
                 });
@@ -4366,26 +4354,22 @@
                     const data = doc.data();
                     const tr = perfisTableBody.insertRow();
                     tr.setAttribute('data-id', doc.id);
+                    const authStatus = data.authUid ? 'Firebase Auth' : 'Migração pendente';
                     tr.innerHTML = `
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${data.login}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${data.nomeUsuario}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm">
-                            <button class="view-password-btn bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs" data-password="${data.senha}">Ver Senha</button>
-                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.login)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.nomeUsuario)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm"><span class="inline-flex items-center px-2 py-1 rounded bg-green-100 text-green-800 text-xs">${authStatus}</span></td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button class="edit-acesso-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                            <button class="delete-btn text-red-600 hover:text-red-900" data-id="${doc.id}">Excluir</button>
+                            <button class="edit-acesso-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                            <button class="delete-btn text-red-600 hover:text-red-900" data-id="${escapeHtml(doc.id)}">Excluir</button>
                         </td>
                     `;
-                });
-                perfisTableBody.querySelectorAll('.view-password-btn').forEach(btn => {
-                    btn.addEventListener('click', () => alert(`A senha temporária é: ${btn.dataset.password}`));
                 });
                 perfisTableBody.querySelectorAll('.delete-btn').forEach(btn => {
                     btn.addEventListener('click', async () => {
                         const id = btn.dataset.id;
                         if (confirm('Tem certeza que deseja excluir este acesso? O usuário não poderá mais logar.')) {
-                           await deleteDoc(doc(db, "acessos", id));
+                           await disableCompanyAccess({ db, accessId: id });
                         }
                     });
                 });
@@ -4421,12 +4405,12 @@
                 const contato = data.contato?.contatoPrincipal || data.contato?.email || '';
 
                 tr.innerHTML = `
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${nome}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${cpfCnpj}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${contato}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(nome)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(cpfCnpj)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(contato)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button class="edit-fornecedor-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                        <button class="delete-btn text-red-600 hover:text-red-900" data-id="${doc.id}">Excluir</button>
+                        <button class="edit-fornecedor-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                        <button class="delete-btn text-red-600 hover:text-red-900" data-id="${escapeHtml(doc.id)}">Excluir</button>
                     </td>
                 `;
             });
@@ -4500,11 +4484,11 @@
                 const isRoot = node.isRoot === true;
 
                 el.innerHTML = `
-                    <span>${accountName}</span>
+                    <span>${escapeHtml(accountName)}</span>
                     <div class="space-x-2">
-                        <button title="Adicionar Sub-conta" class="add-sub-account-btn text-green-600 hover:text-green-800" data-id="${node.id}" ${node.inativo ? 'disabled' : ''}><span class="material-symbols-outlined text-base">add_circle</span></button>
-                        <button title="Editar" class="edit-plano-conta-btn text-blue-600 hover:text-blue-800" data-id="${node.id}" ${isRoot ? 'disabled' : ''}><span class="material-symbols-outlined text-base">edit</span></button>
-                        <button title="Excluir/Inativar" class="delete-plano-conta-btn text-red-600 hover:text-red-800" data-id="${node.id}" ${isRoot ? 'disabled' : ''}><span class="material-symbols-outlined text-base">delete</span></button>
+                        <button title="Adicionar Sub-conta" class="add-sub-account-btn text-green-600 hover:text-green-800" data-id="${escapeHtml(node.id)}" ${node.inativo ? 'disabled' : ''}><span class="material-symbols-outlined text-base">add_circle</span></button>
+                        <button title="Editar" class="edit-plano-conta-btn text-blue-600 hover:text-blue-800" data-id="${escapeHtml(node.id)}" ${isRoot ? 'disabled' : ''}><span class="material-symbols-outlined text-base">edit</span></button>
+                        <button title="Excluir/Inativar" class="delete-plano-conta-btn text-red-600 hover:text-red-800" data-id="${escapeHtml(node.id)}" ${isRoot ? 'disabled' : ''}><span class="material-symbols-outlined text-base">delete</span></button>
                     </div>
                 `;
                 return el;
@@ -4674,11 +4658,11 @@
                     const tr = contasBancariasTableBody.insertRow();
                     tr.setAttribute('data-id', doc.id);
                     tr.innerHTML = `
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${data.nome}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.nome)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${formatCurrency(data.saldoInicial || 0)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button class="edit-conta-bancaria-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                            <button class="delete-btn text-red-600 hover:text-red-900" data-collection="contasBancarias" data-id="${doc.id}">Excluir</button>
+                            <button class="edit-conta-bancaria-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                            <button class="delete-btn text-red-600 hover:text-red-900" data-collection="contasBancarias" data-id="${escapeHtml(doc.id)}">Excluir</button>
                         </td>
                     `;
                 });
@@ -4724,12 +4708,12 @@
                 const contato = data.contato?.telefone || data.contato?.email || '';
 
                 tr.innerHTML = `
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${nome}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${cpfCnpj}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${contato}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(nome)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(cpfCnpj)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(contato)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button class="edit-cliente-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                        <button class="delete-btn text-red-600 hover:text-red-900" data-id="${doc.id}">Excluir</button>
+                        <button class="edit-cliente-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                        <button class="delete-btn text-red-600 hover:text-red-900" data-id="${escapeHtml(doc.id)}">Excluir</button>
                     </td>
                 `;
             });
@@ -4763,10 +4747,10 @@
                     const tr = servicosTableBody.insertRow();
                     tr.setAttribute('data-id', doc.id);
                     tr.innerHTML = `
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${data.nome}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.nome)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button class="edit-servico-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                            <button class="delete-btn text-red-600 hover:text-red-900" data-collection="servicos" data-id="${doc.id}">Excluir</button>
+                            <button class="edit-servico-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                            <button class="delete-btn text-red-600 hover:text-red-900" data-collection="servicos" data-id="${escapeHtml(doc.id)}">Excluir</button>
                         </td>
                     `;
                 });
@@ -4786,12 +4770,6 @@
             });
             servicosTableBody.dataset.listenerAttached = 'true';
         }
-
-        // --- Listener for Notifications ---
-        const notificationsQuery = query(collection(db, 'users', userId, 'notifications'), orderBy('createdAt', 'desc'), limit(50));
-        notificationsUnsubscribe = onSnapshot(notificationsQuery, (querySnapshot) => {
-            renderNotifications(querySnapshot);
-        });
 
         // Cadastros - Funcionários
         const funcionariosQuery = query(collection(db, 'users', userId, 'funcionarios'));
@@ -4825,12 +4803,12 @@
                     const tr = funcionariosTableBody.insertRow();
                     tr.setAttribute('data-id', doc.id);
                     tr.innerHTML = `
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${data.contratual?.matricula || ''}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${data.pessoal?.nomeCompleto || 'N/A'}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${data.contratual?.cargo || ''}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.contratual?.matricula || '')}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.pessoal?.nomeCompleto || 'N/A')}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.contratual?.cargo || '')}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button class="edit-funcionario-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                            <button class="delete-btn text-red-600 hover:text-red-900" data-id="${doc.id}">Excluir</button>
+                            <button class="edit-funcionario-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                            <button class="delete-btn text-red-600 hover:text-red-900" data-id="${escapeHtml(doc.id)}">Excluir</button>
                         </td>
                     `;
                 });
@@ -4918,6 +4896,7 @@
     }
 
     function detachListeners() {
+        cleanupNotifications();
         if (notificationsUnsubscribe) notificationsUnsubscribe();
         if (dashboardUnsubscribe) dashboardUnsubscribe();
         if (empresasUnsubscribe) empresasUnsubscribe();
@@ -4953,57 +4932,6 @@
         interval = seconds / 60;
         if (interval > 1) return Math.floor(interval) + " minutos atrás";
         return "agora mesmo";
-    }
-
-    function renderNotifications(docs) {
-        const notificationList = document.getElementById('notification-list');
-        const notificationIndicators = document.querySelectorAll('[id^="notification-indicator-"]');
-
-        if (!notificationList) return;
-        notificationList.innerHTML = ''; // Clear current list
-
-        if (docs.empty) {
-            notificationList.innerHTML = `
-                <div class="text-center text-gray-500 pt-8">
-                    <span class="material-symbols-outlined text-4xl text-gray-400">notifications_off</span>
-                    <p class="mt-2">Não há notificações no momento.</p>
-                </div>`;
-            notificationIndicators.forEach(indicator => indicator.classList.add('hidden'));
-            return;
-        }
-
-        let unreadCount = 0;
-        docs.forEach(doc => {
-            const notification = doc.data();
-            if (!notification.read) {
-                unreadCount++;
-            }
-
-            const timeAgo = formatTimeAgo(notification.createdAt);
-
-            const item = document.createElement('a');
-            item.href = "#";
-            item.className = `notification-item hover:bg-gray-50 ${!notification.read ? 'bg-blue-50' : ''}`;
-            item.dataset.id = doc.id;
-            item.dataset.link = notification.link;
-
-            item.innerHTML = `
-                <div class="notification-icon ${notification.iconClass || 'notification-icon-info'}">
-                    <span class="material-symbols-outlined">${notification.icon || 'notifications'}</span>
-                </div>
-                <div class="notification-content">
-                    <p class="notification-text">${notification.message}</p>
-                    <p class="notification-time">${timeAgo}</p>
-                </div>
-            `;
-            notificationList.appendChild(item);
-        });
-
-        if (unreadCount > 0) {
-            notificationIndicators.forEach(indicator => indicator.classList.remove('hidden'));
-        } else {
-            notificationIndicators.forEach(indicator => indicator.classList.add('hidden'));
-        }
     }
 
     async function markNotificationsAsRead() {
@@ -5363,82 +5291,89 @@
         }
     }
 
+    function initializeAuthenticatedWorkspace(adminId, userName, commonUtils) {
+        effectiveUserId = adminId;
+        currentUserName = userName;
+        updateUiForUser(currentUserName);
+        setupListeners(effectiveUserId);
+        initializeNotifications(db, effectiveUserId);
+        initializeNotificationsPage(db, effectiveUserId);
+        initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
+        initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
+        initializeRelatorios(db, effectiveUserId, commonUtils);
+        showView('main-page');
+        updateStatusFilterUI();
+        updateReceitaStatusFilterUI();
+    }
+
     onAuthStateChanged(auth, async (user) => {
         detachListeners();
-
         const commonUtils = { formatCurrency, toCents, fromCents, showFeedback };
 
-        // Caso 1: Usuário do Firebase (admin) está logado.
-        if (user) {
-            console.log("Usuário Firebase (admin) detectado.");
-
-            try {
-                const userDocRef = doc(db, 'users', user.uid);
-                const userDocSnap = await getDoc(userDocRef);
-
-                if (!userDocSnap.exists()) {
-                    await setDoc(userDocRef, { primeiroAcesso: true, email: user.email });
-                    adminChangePasswordModal.classList.remove('hidden');
-                    return;
-                } else if (userDocSnap.data().primeiroAcesso === true) {
-                    adminChangePasswordModal.classList.remove('hidden');
-                    return;
-                }
-            } catch (error) {
-                console.error("Error checking for first admin login:", error);
-            }
-
-            effectiveUserId = user.uid;
-            currentUserName = user.email;
-
-            const sessionData = {
-                isAdmin: true,
-                effectiveUserId: user.uid,
-                currentUserName: user.email,
-            };
-            sessionStorage.setItem('userSession', JSON.stringify(sessionData));
-
-            updateUiForUser(currentUserName);
-            setupListeners(effectiveUserId);
-            initializeNotifications(db, effectiveUserId);
-            initializeNotificationsPage(db, effectiveUserId);
-            initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
-            initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
-            initializeRelatorios(db, effectiveUserId, commonUtils);
-            showView('main-page');
-            updateStatusFilterUI();
-            updateReceitaStatusFilterUI();
+        if (!user) {
+            currentCompanyProfile = null;
+            updateUiForUser(null);
+            showView('login-page');
             return;
         }
 
-        // Caso 2: Nenhum usuário Firebase. Verificar se há uma sessão de usuário da empresa.
-        const sessionDataString = sessionStorage.getItem('userSession');
-        if (sessionDataString) {
-            const sessionData = JSON.parse(sessionDataString);
-            if (sessionData.isCompanyUser) {
-                console.log("Restaurando sessão de usuário da empresa.");
-                effectiveUserId = sessionData.effectiveUserId;
-                currentUserName = sessionData.currentUserName;
+        try {
+            const companyProfile = await getCompanyAccessProfile(db, user.uid);
+            if (companyProfile) {
+                if (companyProfile.active === false || !companyProfile.adminId) {
+                    await signOut(auth);
+                    return;
+                }
 
-                updateUiForUser(currentUserName);
-                setupListeners(effectiveUserId);
-                initializeNotifications(db, effectiveUserId);
-                initializeNotificationsPage(db, effectiveUserId);
-                initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
-                initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
-                initializeRelatorios(db, effectiveUserId, commonUtils);
-                showView('main-page');
-                updateStatusFilterUI();
-                updateReceitaStatusFilterUI();
+                currentCompanyProfile = companyProfile;
+                effectiveUserId = companyProfile.adminId;
+                currentUserName = companyProfile.nomeUsuario || companyProfile.login || user.email;
+
+                if (companyProfile.primeiroAcesso === true) {
+                    document.getElementById('change-password-userid').value = companyProfile.accessId || '';
+                    changePasswordModal.classList.remove('hidden');
+                    return;
+                }
+
+                initializeAuthenticatedWorkspace(effectiveUserId, currentUserName, commonUtils);
                 return;
             }
-        }
 
-        // Caso 3: Nenhum usuário Firebase e nenhuma sessão de usuário da empresa. Mostrar página de login.
-        console.log("Nenhum usuário ativo ou sessão. Mostrando página de login.");
-        sessionStorage.removeItem('userSession'); // Limpa dados obsoletos
-        updateUiForUser(null);
-        showView('login-page');
+            // A disabled/deleted company Firebase account must never fall through and
+            // be treated as a new administrator.
+            if (isCompanyAuthEmail(user.email)) {
+                await signOut(auth);
+                userLoginError.textContent = 'Este acesso foi desativado ou não está mais vinculado a uma empresa.';
+                return;
+            }
+
+            currentCompanyProfile = null;
+            const userDocRef = doc(db, 'users', user.uid);
+            const userDocSnap = await getDoc(userDocRef);
+
+            if (!userDocSnap.exists()) {
+                await setDoc(userDocRef, { primeiroAcesso: true, email: user.email });
+                adminChangePasswordModal.classList.remove('hidden');
+                return;
+            }
+            if (userDocSnap.data().primeiroAcesso === true) {
+                adminChangePasswordModal.classList.remove('hidden');
+                return;
+            }
+
+            const migration = await migrateLegacyCompanyAccesses({ db, firebaseConfig, adminId: user.uid });
+            if (migration.failures.length > 0) {
+                console.error('Alguns acessos legados não puderam ser migrados:', migration.failures);
+                const failedLogins = migration.failures.map(item => item.login || item.accessId).join(', ');
+                alert(`ATENÇÃO: ${migration.failures.length} acesso(s) não puderam ser migrados para o Firebase Auth: ${failedLogins}. Os dados antigos foram preservados. Não publique as novas regras do Firestore até corrigir esses acessos e a migração terminar sem falhas.`);
+            }
+
+            initializeAuthenticatedWorkspace(user.uid, user.email, commonUtils);
+        } catch (error) {
+            console.error('Erro ao restaurar a sessão autenticada:', error);
+            updateUiForUser(null);
+            showView('login-page');
+        }
     });
 
     if (adminLoginLink) {
@@ -5460,27 +5395,9 @@
       const email = document.getElementById('admin-login-email').value;
       const password = document.getElementById('admin-login-password').value;
 
-      // Special handling for test user to bypass Firebase auth
-      if (email === 'test.user@email.com') {
-          console.log("Test user login detected. Simulating login.");
-          window.IS_TEST_RUN = true;
-          effectiveUserId = 'test-user-123';
-          currentUserName = email;
-
-          // Replicate auth success logic for test user
-          detachListeners();
-          updateUiForUser(currentUserName);
-          setupListeners(effectiveUserId); // Use a mock UID
-          initializeNotifications(db, effectiveUserId); // Initialize notifications for the test user
-          adminLoginModal.classList.add('hidden');
-          showView('main-page');
-          updateStatusFilterUI();
-          return; // Stop here for test user
-      }
-
       try {
         await signInWithEmailAndPassword(auth, email, password);
-        adminLoginModal.classList.add('hidden'); // Close modal on success
+        adminLoginModal.classList.add('hidden');
       } catch (error) {
         adminLoginError.textContent = 'E-mail ou senha inválidos.';
       }
@@ -5499,75 +5416,25 @@
         }
 
         try {
-            const q = query(
-                collection(db, "acessos"),
-                where("empresaId", "==", empresaId),
-                where("login", "==", nomeUsuario),
-                where("senha", "==", senha) // WARNING: INSECURE, plain text password check.
-            );
-
-            const querySnapshot = await getDocs(q);
-
-            if (querySnapshot.empty) {
-                userLoginError.textContent = 'Empresa, usuário ou senha inválidos.';
-                return;
-            }
-
-            const userDoc = querySnapshot.docs[0];
-            const userData = userDoc.data();
-            const acessoId = userDoc.id;
-
-            if (userData.primeiroAcesso) {
-                document.getElementById('change-password-userid').value = acessoId;
-                changePasswordModal.classList.remove('hidden');
-            } else {
-                effectiveUserId = userData.adminId;
-                if (!effectiveUserId) {
-                    userLoginError.textContent = 'Erro de configuração: A empresa deste usuário não tem um administrador associado.';
-                    return;
-                }
-                currentUserName = userData.nomeUsuario;
-
-                // Salvar a sessão do usuário da empresa
-                const sessionData = {
-                    isCompanyUser: true,
-                    effectiveUserId: userData.adminId,
-                    currentUserName: userData.nomeUsuario,
-                    acessoId: userDoc.id
-                };
-                sessionStorage.setItem('userSession', JSON.stringify(sessionData));
-
-                userEmailSpan.textContent = currentUserName;
-                userEmailCadastrosSpan.textContent = currentUserName;
-                userEmailContasSpan.textContent = currentUserName;
-
-                // We are NOT a Firebase Auth user, so we call setupListeners with the admin's ID
-                // to access the correct data partitions.
-                setupListeners(effectiveUserId);
-                initializeNotifications(db, effectiveUserId);
-                initializeNotificationsPage(db, effectiveUserId);
-                initializeFluxoDeCaixa(db, effectiveUserId, commonUtils);
-                initializeMovimentacaoBancaria(db, effectiveUserId, commonUtils, currentUserName);
-                showView('main-page');
-            }
+            await signInCompanyUser({ auth, db, empresaId, login: nomeUsuario, password: senha });
         } catch (error) {
-            console.error("Erro no login do usuário:", error);
-            userLoginError.textContent = 'Ocorreu um erro. Tente novamente.';
+            console.error('Erro no login do usuário da empresa:', error);
+            userLoginError.textContent = error?.code === 'company-auth/access-not-ready'
+                ? 'Este acesso ainda precisa ser migrado. Entre uma vez como administrador desta empresa e tente novamente.'
+                : 'Empresa, usuário ou senha inválidos.';
         }
     });
 
     changePasswordForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         changePasswordError.textContent = '';
-        const acessoId = document.getElementById('change-password-userid').value;
         const newPassword = document.getElementById('new-password').value;
         const confirmPassword = document.getElementById('confirm-password').value;
 
-        if (!acessoId) {
-            changePasswordError.textContent = 'Erro: ID do acesso não encontrado.';
+        if (!currentCompanyProfile || !auth.currentUser) {
+            changePasswordError.textContent = 'Sessão do usuário não encontrada. Faça login novamente.';
             return;
         }
-
         if (newPassword !== confirmPassword) {
             changePasswordError.textContent = 'As senhas não conferem.';
             return;
@@ -5578,48 +5445,17 @@
         }
 
         try {
-            const userDocRef = doc(db, "acessos", acessoId);
-            await updateDoc(userDocRef, {
-                senha: newPassword, // WARNING: INSECURE, plain text password.
-                primeiroAcesso: false
-            });
-
+            await completeCompanyFirstAccess({ auth, db, profile: currentCompanyProfile, newPassword });
+            currentCompanyProfile = { ...currentCompanyProfile, primeiroAcesso: false };
             changePasswordModal.classList.add('hidden');
-
-            // Após a troca de senha, realize o login automaticamente
-            const userDoc = await getDoc(userDocRef);
-            const userData = userDoc.data();
-            effectiveUserId = userData.adminId;
-
-            if (!effectiveUserId) {
-                userLoginError.textContent = 'Erro de configuração: Administrador não encontrado.';
-                showView('login-page');
-                return;
-            }
-
-            currentUserName = userData.nomeUsuario;
-
-            // Criar a sessão após a troca de senha
-            const sessionData = {
-                isCompanyUser: true,
-                effectiveUserId: userData.adminId,
-                currentUserName: userData.nomeUsuario,
-                acessoId: userDoc.id
-            };
-            sessionStorage.setItem('userSession', JSON.stringify(sessionData));
-
-            userEmailSpan.textContent = currentUserName;
-            userEmailCadastrosSpan.textContent = currentUserName;
-            userEmailContasSpan.textContent = currentUserName;
-
-            setupListeners(effectiveUserId);
-            initializeNotifications(db, effectiveUserId);
-            initializeNotificationsPage(db, effectiveUserId);
-            showView('main-page');
-
+            initializeAuthenticatedWorkspace(
+                currentCompanyProfile.adminId,
+                currentCompanyProfile.nomeUsuario || currentCompanyProfile.login,
+                { formatCurrency, toCents, fromCents, showFeedback }
+            );
         } catch (error) {
-            console.error("Erro ao alterar senha:", error);
-            changePasswordError.textContent = 'Ocorreu um erro ao alterar a senha.';
+            console.error('Erro ao alterar senha do usuário da empresa:', error);
+            changePasswordError.textContent = 'Não foi possível alterar a senha. Faça login novamente e tente de novo.';
         }
     });
 
@@ -5661,22 +5497,18 @@
         }
     });
 
-    const performLogout = () => {
-        console.log("Performing logout...");
-        // Limpa a sessão do storage. Este é o passo mais importante.
-        sessionStorage.removeItem('userSession');
-
-        // Se era um usuário admin, faz o signOut do Firebase.
-        // O listener onAuthStateChanged vai então ser disparado e redirecionar para o login.
-        if (auth.currentUser) {
-            signOut(auth).catch(error => console.error("Erro no logout do admin:", error));
-        } else {
-            // Se era um usuário da empresa, não há sessão do Firebase para deslogar.
-            // Limpar o session storage é suficiente. Recarregar a página garante um estado limpo
-            // e que o listener onAuthStateChanged execute e direcione para a página de login.
-            location.reload();
+    const performLogout = async () => {
+        console.log('Performing logout...');
+        detachListeners();
+        currentCompanyProfile = null;
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.error('Erro ao sair:', error);
+            updateUiForUser(null);
+            showView('login-page');
         }
-    }
+    };
 
     logoutButton.addEventListener('click', performLogout);
     logoutButtonCadastros.addEventListener('click', performLogout);
@@ -6340,8 +6172,7 @@
         try {
             if (acessoId) {
                 // Lógica de Atualização
-                const docRef = doc(db, 'acessos', acessoId);
-                await updateDoc(docRef, { login: login });
+                await updateCompanyAccessLogin({ db, accessId: acessoId, login });
                 showFeedback(feedbackId, "Acesso atualizado com sucesso!", false);
             } else {
                 // Lógica de Criação
@@ -6360,20 +6191,18 @@
                 }
                 const empresa = systemUserDoc.data().empresa;
 
-                const tempPassword = generateRandomPassword(6, true);
+                const tempPassword = generateRandomPassword(12, false);
 
-                const acessoData = {
-                    login,
-                    senha: tempPassword,
-                    primeiroAcesso: true,
+                await createCompanyAccess({
+                    db,
+                    firebaseConfig,
+                    adminId,
+                    empresaId: empresa.id,
                     systemUserId,
                     nomeUsuario,
-                    empresaId: empresa.id,
-                    adminId,
-                    createdAt: serverTimestamp()
-                };
-
-                await addDoc(collection(db, 'acessos'), acessoData);
+                    login,
+                    tempPassword
+                });
                 showFeedback(feedbackId, `Acesso para '${nomeUsuario}' criado! Login: ${login}, Senha Temporária: ${tempPassword}`, false, true);
             }
 
@@ -6385,7 +6214,10 @@
 
         } catch (error) {
             console.error(`Erro ao salvar acesso:`, error);
-            showFeedback(feedbackId, "Erro ao salvar acesso. Tente novamente.", true);
+            const message = error?.code === 'company-auth/login-in-use'
+                ? error.message
+                : 'Erro ao salvar acesso. Tente novamente.';
+            showFeedback(feedbackId, message, true);
         }
     });
     fornecedorForm.addEventListener('submit', async (e) => {
@@ -6877,13 +6709,13 @@
             tr.innerHTML = `
                 <td class="p-4">
                     <div class="flex items-center">
-                        <input type="checkbox" class="despesa-checkbox h-4 w-4 text-[var(--primary-color)] focus:ring-[var(--primary-color)] border-gray-300 rounded" data-id="${doc.id}">
+                        <input type="checkbox" class="despesa-checkbox h-4 w-4 text-[var(--primary-color)] focus:ring-[var(--primary-color)] border-gray-300 rounded" data-id="${escapeHtml(doc.id)}">
                     </div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.numeroDocumento || ''}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${data.descricao}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${data.favorecidoNome || 'N/A'}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${formaPagamentoText}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${escapeHtml(data.numeroDocumento || '')}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${escapeHtml(data.descricao)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${escapeHtml(data.favorecidoNome || 'N/A')}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${escapeHtml(formaPagamentoText)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${new Date(data.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800 font-medium">${formatCurrency(valorOriginal)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-yellow-600 font-bold">${formatCurrency(totalDescontos)}</td>
@@ -7271,14 +7103,14 @@
 
                     let rowHTML;
                     if (isEstornado) {
-                        rowHTML = `<td class="p-4"><input type="checkbox" class="mov-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${mov.id}" disabled></td>` +
-                                  `<td colspan="7" class="px-4 py-2 text-sm text-gray-500"><del>${new Date(mov.dataTransacao + 'T00:00:00').toLocaleDateString('pt-BR')} - ${mov.descricao} [ESTORNADO]</del></td>`;
+                        rowHTML = `<td class="p-4"><input type="checkbox" class="mov-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${escapeHtml(mov.id)}" disabled></td>` +
+                                  `<td colspan="7" class="px-4 py-2 text-sm text-gray-500"><del>${new Date(mov.dataTransacao + 'T00:00:00').toLocaleDateString('pt-BR')} - ${escapeHtml(mov.descricao)} [ESTORNADO]</del></td>`;
                     } else {
                          rowHTML = `
-                            <td class="p-4"><input type="checkbox" class="mov-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${mov.id}"></td>
+                            <td class="p-4"><input type="checkbox" class="mov-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${escapeHtml(mov.id)}"></td>
                             <td class="px-4 py-2 text-sm">${new Date(mov.dataTransacao + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                            <td class="px-4 py-2 text-sm w-2/5">${mov.descricao}</td>
-                            <td class="px-4 py-2 text-sm"><a href="#" class="text-blue-600 hover:underline">${mov.origemDescricao || 'N/A'}</a></td>
+                            <td class="px-4 py-2 text-sm w-2/5">${escapeHtml(mov.descricao)}</td>
+                            <td class="px-4 py-2 text-sm"><a href="#" class="text-blue-600 hover:underline">${escapeHtml(mov.origemDescricao || 'N/A')}</a></td>
                             <td class="px-4 py-2 text-right text-sm text-green-600">${isEntrada ? formatCurrency(mov.valor) : ''}</td>
                             <td class="px-4 py-2 text-right text-sm text-red-600">${!isEntrada ? formatCurrency(Math.abs(mov.valor)) : ''}</td>
                             <td class="px-4 py-2 text-right text-sm font-bold">${formatCurrency(saldoCorrente)}</td>
@@ -7568,7 +7400,7 @@
 
                     tr.innerHTML = `
                         <td class="px-4 py-2 text-sm ${isEstorno ? 'text-red-500' : (isEstornado ? 'text-gray-500' : 'text-green-600')}">
-                            ${pData.tipoTransacao} ${isEstornado ? '(Estornado)' : ''}
+                            ${escapeHtml(pData.tipoTransacao)} ${isEstornado ? '(Estornado)' : ''}
                         </td>
                         <td class="px-4 py-2 text-sm">${new Date(pData.dataTransacao + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-4 py-2 text-sm">${formatCurrency(pData.valorPrincipal || 0)}</td>
@@ -7576,8 +7408,8 @@
                         <td class="px-4 py-2 text-sm">${formatCurrency(pData.descontosAplicados || 0)}</td>
                         <td class="px-4 py-2 text-sm">
                             <button class="estornar-btn text-red-500 hover:underline disabled:text-gray-400 disabled:cursor-not-allowed"
-                                    data-pagamento-id="${pagamentoDoc.id}"
-                                    data-despesa-id="${despesaId}"
+                                    data-pagamento-id="${escapeHtml(pagamentoDoc.id)}"
+                                    data-despesa-id="${escapeHtml(despesaId)}"
                                     ${isEstorno || isEstornado ? 'disabled' : ''}>
                                 Estornar
                             </button>
@@ -7604,10 +7436,10 @@
                         const statusClass = statusClasses[statusText] || 'bg-gray-100 text-gray-800';
 
                         tr.innerHTML = `
-                            <td class="px-4 py-2 text-sm">${installmentData.descricao}</td>
+                            <td class="px-4 py-2 text-sm">${escapeHtml(installmentData.descricao)}</td>
                             <td class="px-4 py-2 text-sm">${new Date(installmentData.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                             <td class="px-4 py-2 text-sm">${formatCurrency(installmentData.valorOriginal)}</td>
-                            <td class="px-4 py-2 text-sm"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">${statusText}</span></td>
+                            <td class="px-4 py-2 text-sm"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">${escapeHtml(statusText)}</span></td>
                         `;
                         // Highlight the current row
                         if (doc.id === despesaId) {
@@ -8548,7 +8380,7 @@ function generateParcelasTable(numParcelas, saldoOriginal, descricaoOriginal) {
                 <td class="px-3 py-2 text-sm text-gray-500">${i + 1}</td>
                 <td class="px-3 py-2"><input type="text" class="form-input w-full desdobrar-valor-parcela" value="${fromCents(valorParcela)}"></td>
                 <td class="px-3 py-2"><input type="date" class="form-input w-full desdobrar-vencimento-parcela" value="${novaDataVencimento.toISOString().split('T')[0]}"></td>
-                <td class="px-3 py-2"><input type="text" class="form-input w-full desdobrar-descricao-parcela" value="Ref. Título ${originalReceitaData.numeroDocumento || originalReceitaData.id.substring(0,4)} - Parc. ${i + 1}/${numParcelas}"></td>
+                <td class="px-3 py-2"><input type="text" class="form-input w-full desdobrar-descricao-parcela" value="Ref. Título ${escapeHtml(originalReceitaData.numeroDocumento || originalReceitaData.id.substring(0,4))} - Parc. ${i + 1}/${numParcelas}"></td>
             </tr>`;
     }
 
@@ -8750,7 +8582,7 @@ function validateParcelasSum() {
 
                     tr.innerHTML = `
                         <td class="px-4 py-2 text-sm ${isEstorno ? 'text-red-500' : (isEstornado ? 'text-gray-500' : 'text-green-600')}">
-                            ${pData.tipoTransacao} ${isEstornado ? '(Estornado)' : ''}
+                            ${escapeHtml(pData.tipoTransacao)} ${isEstornado ? '(Estornado)' : ''}
                         </td>
                         <td class="px-4 py-2 text-sm">${new Date(pData.dataTransacao + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-4 py-2 text-sm">${formatCurrency(pData.valorPrincipal || 0)}</td>
@@ -8758,8 +8590,8 @@ function validateParcelasSum() {
                         <td class="px-4 py-2 text-sm">${formatCurrency(pData.descontosConcedidos || 0)}</td>
                         <td class="px-4 py-2 text-sm">
                              <button class="estornar-recebimento-btn text-red-500 hover:underline disabled:text-gray-400 disabled:cursor-not-allowed"
-                                     data-recebimento-id="${recebimentoDoc.id}"
-                                     data-receita-id="${receitaId}"
+                                     data-recebimento-id="${escapeHtml(recebimentoDoc.id)}"
+                                     data-receita-id="${escapeHtml(receitaId)}"
                                      ${isEstorno || isEstornado ? 'disabled' : ''}>
                                  Estornar
                              </button>
@@ -9262,17 +9094,17 @@ function validateParcelasSum() {
 
 
             tr.innerHTML = `
-                <td class="p-4"><input type="checkbox" class="receita-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${doc.id}"></td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.numeroDocumento || ''}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${data.descricao}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${data.clienteNome || 'N/A'}</td>
+                <td class="p-4"><input type="checkbox" class="receita-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${escapeHtml(doc.id)}"></td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${escapeHtml(data.numeroDocumento || '')}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${escapeHtml(data.descricao)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${escapeHtml(data.clienteNome || 'N/A')}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${new Date((data.dataVencimento || data.vencimento) + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800 font-medium">${formatCurrency(valorOriginal)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-yellow-600 font-bold">${formatCurrency(totalDescontos)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-orange-600 font-bold">${formatCurrency(totalJuros)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-bold">${formatCurrency(totalRecebido)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-bold">${formatCurrency(saldoPendente)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">${statusText}</span></td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">${escapeHtml(statusText)}</span></td>
             `;
         });
     }

@@ -1,4 +1,5 @@
 import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp, Timestamp, orderBy, deleteDoc, writeBatch, updateDoc, doc, onSnapshot, limit } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { escapeHtml, safeCssTokenList, safeMaterialIcon } from './security-utils.js';
 
 // --- Notification Generation Logic ---
 
@@ -213,12 +214,28 @@ function checkAllNotifications(db, userId) {
  * @param {object} db - The Firestore database instance.
  * @param {string} userId - The ID of the user.
  */
+let activeNotificationCleanup = null;
+let activeNotificationPageCleanup = null;
+
+export function cleanupNotifications() {
+    if (activeNotificationCleanup) {
+        activeNotificationCleanup();
+        activeNotificationCleanup = null;
+    }
+    if (activeNotificationPageCleanup) {
+        activeNotificationPageCleanup();
+        activeNotificationPageCleanup = null;
+    }
+    allNotifications = [];
+    notificationTypes.clear();
+}
+
 export function initializeNotifications(db, userId) {
-    if (!userId) return;
+    cleanupNotifications();
+    if (!userId) return () => {};
 
     checkAllNotifications(db, userId);
-    setInterval(() => checkAllNotifications(db, userId), 300000); // Check every 5 minutes
-
+    const intervalId = setInterval(() => checkAllNotifications(db, userId), 300000);
     let sidebarNotifications = [];
 
     const notificationsQuery = query(
@@ -226,10 +243,8 @@ export function initializeNotifications(db, userId) {
         orderBy('createdAt', 'desc'),
         limit(50)
     );
-
-    // Use onSnapshot to listen for real-time updates
-    onSnapshot(notificationsQuery, (querySnapshot) => {
-        sidebarNotifications = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const unsubscribeSnapshot = onSnapshot(notificationsQuery, (querySnapshot) => {
+        sidebarNotifications = querySnapshot.docs.map(snapshotDoc => ({ id: snapshotDoc.id, ...snapshotDoc.data() }));
         renderSidebarNotifications(sidebarNotifications, db, userId);
     });
 
@@ -238,64 +253,57 @@ export function initializeNotifications(db, userId) {
     const clearPinnedCheckbox = document.getElementById('clear-pinned-checkbox');
     const clearImportantCheckbox = document.getElementById('clear-important-checkbox');
 
-    if (clearButton) {
-        clearButton.addEventListener('click', async () => {
-            const clearPinned = clearPinnedCheckbox.checked;
-            const clearImportant = clearImportantCheckbox.checked;
-            const batch = writeBatch(db);
-            let notificationsToClearCount = 0;
+    const clearHandler = async () => {
+        const clearPinned = clearPinnedCheckbox?.checked === true;
+        const clearImportant = clearImportantCheckbox?.checked === true;
+        const batch = writeBatch(db);
+        let notificationsToClearCount = 0;
+        const visibleNotifications = sidebarNotifications.filter(n => n.clearedFromSidebar !== true);
 
-            const visibleNotifications = sidebarNotifications.filter(n => n.clearedFromSidebar !== true);
-
-            visibleNotifications.forEach(notification => {
-                const isPinned = notification.pinned === true;
-                const isImportant = notification.important === true;
-
-                if ((!isPinned || clearPinned) && (!isImportant || clearImportant)) {
-                    const docRef = doc(db, 'users', userId, 'notifications', notification.id);
-                    batch.update(docRef, { clearedFromSidebar: true });
-                    notificationsToClearCount++;
-                }
-            });
-
-            if (notificationsToClearCount > 0) {
-                try {
-                    await batch.commit();
-                } catch (error) {
-                    console.error("Error clearing notifications:", error);
-                }
+        visibleNotifications.forEach(notification => {
+            const isPinned = notification.pinned === true;
+            const isImportant = notification.important === true;
+            if ((!isPinned || clearPinned) && (!isImportant || clearImportant)) {
+                batch.update(doc(db, 'users', userId, 'notifications', notification.id), { clearedFromSidebar: true });
+                notificationsToClearCount++;
             }
         });
-    }
+        if (notificationsToClearCount > 0) await batch.commit();
+    };
 
-    if (notificationList) {
-        notificationList.addEventListener('click', async (e) => {
-            const container = e.target.closest('.notification-item-container');
-            if (!container) return;
+    const listHandler = async (e) => {
+        const container = e.target.closest('.notification-item-container');
+        if (!container) return;
+        const notificationId = container.dataset.id;
+        const notification = sidebarNotifications.find(n => n.id === notificationId);
+        if (!notification) return;
 
-            const notificationId = container.dataset.id;
-            const notification = sidebarNotifications.find(n => n.id === notificationId);
-            if (!notification) return;
+        const notificationRef = doc(db, 'users', userId, 'notifications', notificationId);
+        const pinButton = e.target.closest('.toggle-pin-btn');
+        const importantButton = e.target.closest('.toggle-important-btn');
+        const link = e.target.closest('.notification-item-link');
 
-            const notificationRef = doc(db, 'users', userId, 'notifications', notificationId);
-            const pinButton = e.target.closest('.toggle-pin-btn');
-            const importantButton = e.target.closest('.toggle-important-btn');
-            const link = e.target.closest('.notification-item-link');
+        if (pinButton) {
+            e.stopPropagation();
+            await updateDoc(notificationRef, { pinned: !notification.pinned });
+        } else if (importantButton) {
+            e.stopPropagation();
+            await updateDoc(notificationRef, { important: !notification.important });
+        } else if (link && !notification.read) {
+            await updateDoc(notificationRef, { read: true });
+        }
+    };
 
-            if (pinButton) {
-                e.stopPropagation();
-                await updateDoc(notificationRef, { pinned: !notification.pinned });
-            } else if (importantButton) {
-                e.stopPropagation();
-                await updateDoc(notificationRef, { important: !notification.important });
-            } else if (link) {
-                if (!notification.read) {
-                    await updateDoc(notificationRef, { read: true });
-                }
-                // Handle navigation logic if needed
-            }
-        });
-    }
+    clearButton?.addEventListener('click', clearHandler);
+    notificationList?.addEventListener('click', listHandler);
+
+    activeNotificationCleanup = () => {
+        clearInterval(intervalId);
+        unsubscribeSnapshot();
+        clearButton?.removeEventListener('click', clearHandler);
+        notificationList?.removeEventListener('click', listHandler);
+    };
+    return activeNotificationCleanup;
 }
 
 
@@ -356,14 +364,14 @@ function renderSidebarNotifications(notifications, db, userId) {
         item.dataset.id = notification.id;
 
         item.innerHTML = `
-            <a href="#" class="notification-item-link flex-grow" data-link="${notification.link || '#'}">
+            <a href="#" class="notification-item-link flex-grow" data-link="${escapeHtml(notification.link || '#')}">
                 <div class="flex items-start gap-4">
-                    <div class="notification-icon ${notification.iconClass || 'notification-icon-info'}">
-                        <span class="material-symbols-outlined">${notification.icon || 'notifications'}</span>
+                    <div class="notification-icon ${safeCssTokenList(notification.iconClass, 'notification-icon-info')}">
+                        <span class="material-symbols-outlined">${safeMaterialIcon(notification.icon)}</span>
                     </div>
                     <div class="notification-content">
-                        <p class="notification-text">${notification.message}</p>
-                        <p class="notification-time">${timeAgo}</p>
+                        <p class="notification-text">${escapeHtml(notification.message)}</p>
+                        <p class="notification-time">${escapeHtml(timeAgo)}</p>
                     </div>
                 </div>
             </a>
@@ -449,22 +457,22 @@ function renderFullNotificationList(groupedNotifications) {
             hasNotifications = true;
             const groupDiv = document.createElement('div');
             groupDiv.className = 'space-y-4';
-            groupDiv.innerHTML = `<h2 class="text-xl font-semibold text-gray-800">${groupName}</h2>`;
+            groupDiv.innerHTML = `<h2 class="text-xl font-semibold text-gray-800">${escapeHtml(groupName)}</h2>`;
 
             notifications.forEach(notif => {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = `p-4 rounded-lg border flex items-start gap-4 ${notif.read ? 'bg-white' : 'bg-blue-50 border-blue-200'}`;
                 itemDiv.innerHTML = `
-                    <div class="notification-icon ${notif.iconClass || 'notification-icon-info'}">
-                        <span class="material-symbols-outlined">${notif.icon || 'notifications'}</span>
+                    <div class="notification-icon ${safeCssTokenList(notif.iconClass, 'notification-icon-info')}">
+                        <span class="material-symbols-outlined">${safeMaterialIcon(notif.icon)}</span>
                     </div>
                     <div class="flex-grow">
-                        <p class="notification-text">${notif.message}</p>
+                        <p class="notification-text">${escapeHtml(notif.message)}</p>
                         <p class="notification-time">${notif.createdAt.toDate().toLocaleString('pt-BR')}</p>
                     </div>
                     <div class="flex items-center gap-2">
                         ${!notif.read ? '<div class="w-2 h-2 bg-blue-500 rounded-full" title="Não lida"></div>' : ''}
-                        <button class="delete-notification-btn p-1 rounded-full hover:bg-gray-200" data-id="${notif.id}">
+                        <button class="delete-notification-btn p-1 rounded-full hover:bg-gray-200" data-id="${escapeHtml(notif.id)}">
                             <span class="material-symbols-outlined text-base text-gray-500">delete</span>
                         </button>
                     </div>
@@ -516,7 +524,7 @@ function applyAndRenderFilters() {
     const typeFilter = document.getElementById('notification-type-filter').value;
 
     const filtered = allNotifications.filter(notif => {
-        const searchMatch = !searchInput || notif.message.toLowerCase().includes(searchInput);
+        const searchMatch = !searchInput || String(notif.message || '').toLowerCase().includes(searchInput);
         const statusMatch = statusFilter === 'all' || (statusFilter === 'read' && notif.read) || (statusFilter === 'unread' && !notif.read);
         const typeMatch = typeFilter === 'all' || notif.type === typeFilter;
         return searchMatch && statusMatch && typeMatch;
@@ -556,71 +564,74 @@ async function fetchAndDisplayAllNotifications(db, userId) {
  * @param {string} userId - The ID of the user.
  */
 export function initializeNotificationsPage(db, userId) {
-    if (!userId) return;
+    if (activeNotificationPageCleanup) {
+        activeNotificationPageCleanup();
+        activeNotificationPageCleanup = null;
+    }
+    if (!userId) return () => {};
 
     const markAllReadBtn = document.getElementById('mark-all-as-read-btn');
     const searchInput = document.getElementById('notification-search-input');
     const statusFilter = document.getElementById('notification-status-filter');
     const typeFilter = document.getElementById('notification-type-filter');
+    const container = document.getElementById('full-notification-list-container');
 
-    // Event listener for when the notifications page becomes visible
-    document.addEventListener('view-shown', (e) => {
+    const viewShownHandler = (e) => {
         if (e.detail.viewId === 'notifications-page') {
             fetchAndDisplayAllNotifications(db, userId);
         }
-    });
+    };
+    const filterHandler = () => applyAndRenderFilters();
+    const markAllReadHandler = async () => {
+        const unreadIds = allNotifications.filter(n => !n.read).map(n => n.id);
+        if (unreadIds.length === 0) {
+            alert('Todas as notificações já foram lidas.');
+            return;
+        }
 
-    // Add listeners for filter controls
-    if(searchInput) searchInput.addEventListener('input', applyAndRenderFilters);
-    if(statusFilter) statusFilter.addEventListener('change', applyAndRenderFilters);
-    if(typeFilter) typeFilter.addEventListener('change', applyAndRenderFilters);
-
-    // Add listener for "Mark all as read" button
-    if (markAllReadBtn) {
-        markAllReadBtn.addEventListener('click', async () => {
-            const unreadIds = allNotifications.filter(n => !n.read).map(n => n.id);
-            if (unreadIds.length === 0) {
-                alert("Todas as notificações já foram lidas.");
-                return;
-            }
-
-            const batch = writeBatch(db);
-            unreadIds.forEach(id => {
-                const docRef = doc(db, 'users', userId, 'notifications', id);
-                batch.update(docRef, { read: true });
-            });
-
-            try {
-                await batch.commit();
-                console.log("All notifications marked as read.");
-                // Refresh the view
-                fetchAndDisplayAllNotifications(db, userId);
-            } catch (error) {
-                console.error("Error marking all notifications as read:", error);
-            }
+        const batch = writeBatch(db);
+        unreadIds.forEach(id => {
+            batch.update(doc(db, 'users', userId, 'notifications', id), { read: true });
         });
-    }
 
-    // Add listener for deleting individual notifications
-    const container = document.getElementById('full-notification-list-container');
-    if (container) {
-        container.addEventListener('click', async (e) => {
-            const deleteButton = e.target.closest('.delete-notification-btn');
-            if (deleteButton) {
-                e.stopPropagation();
-                const notifId = deleteButton.dataset.id;
-                if (confirm("Tem certeza que deseja excluir esta notificação?")) {
-                    try {
-                        await deleteDoc(doc(db, 'users', userId, 'notifications', notifId));
-                        // Refresh list after deletion
-                        allNotifications = allNotifications.filter(n => n.id !== notifId);
-                        applyAndRenderFilters();
-                    } catch (error) {
-                        console.error("Error deleting notification:", error);
-                        alert("Não foi possível excluir a notificação.");
-                    }
-                }
-            }
-        });
-    }
+        try {
+            await batch.commit();
+            await fetchAndDisplayAllNotifications(db, userId);
+        } catch (error) {
+            console.error('Error marking all notifications as read:', error);
+        }
+    };
+    const containerClickHandler = async (e) => {
+        const deleteButton = e.target.closest('.delete-notification-btn');
+        if (!deleteButton) return;
+        e.stopPropagation();
+        const notifId = deleteButton.dataset.id;
+        if (!confirm('Tem certeza que deseja excluir esta notificação?')) return;
+
+        try {
+            await deleteDoc(doc(db, 'users', userId, 'notifications', notifId));
+            allNotifications = allNotifications.filter(n => n.id !== notifId);
+            applyAndRenderFilters();
+        } catch (error) {
+            console.error('Error deleting notification:', error);
+            alert('Não foi possível excluir a notificação.');
+        }
+    };
+
+    document.addEventListener('view-shown', viewShownHandler);
+    searchInput?.addEventListener('input', filterHandler);
+    statusFilter?.addEventListener('change', filterHandler);
+    typeFilter?.addEventListener('change', filterHandler);
+    markAllReadBtn?.addEventListener('click', markAllReadHandler);
+    container?.addEventListener('click', containerClickHandler);
+
+    activeNotificationPageCleanup = () => {
+        document.removeEventListener('view-shown', viewShownHandler);
+        searchInput?.removeEventListener('input', filterHandler);
+        statusFilter?.removeEventListener('change', filterHandler);
+        typeFilter?.removeEventListener('change', filterHandler);
+        markAllReadBtn?.removeEventListener('click', markAllReadHandler);
+        container?.removeEventListener('click', containerClickHandler);
+    };
+    return activeNotificationPageCleanup;
 }
