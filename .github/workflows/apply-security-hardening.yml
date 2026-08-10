@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0
 
       - name: Apply final review patch
-        run: python3 scripts/finalize-security-hardening.py
+        run: python3 scripts/run-finalize-security-hardening.py
 
       - name: Validate hardened source
         shell: bash
@@ -76,7 +76,6 @@ jobs:
           assert 'escapeHtml(t.descricao)' in fluxo
           assert 'escapeHtml(mov.descricao' in bank
 
-          # Values identified in the full innerHTML review must not appear raw.
           risky_raw = [
               '<span>${accountName}</span>',
               "${data.numeroDocumento || ''}</td>",
