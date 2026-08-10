@@ -1,0 +1,114 @@
+name: Validate final security hardening
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    if: github.event.pull_request.number == 14 && github.event.label.name == 'validate-final-security'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/security-auth-reporting-hardening-v2
+          fetch-depth: 0
+
+      - name: Apply final compatibility patch
+        run: python3 scripts/apply-final-compatibility.py
+
+      - name: Validate JavaScript and invariants
+        shell: bash
+        run: |
+          node --check auth-company.js
+          node --check security-utils.js
+          node --check financial-ledger.js
+          node --check fluxo-de-caixa.js
+          node --check movimentacao-bancaria.js
+          node --check notifications.js
+          node --check relatorios.js
+          python3 -m json.tool firebase.json >/dev/null
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          html = Path('index.html').read_text(encoding='utf-8')
+          auth = Path('auth-company.js').read_text(encoding='utf-8')
+          notifications = Path('notifications.js').read_text(encoding='utf-8')
+          reports = Path('relatorios.js').read_text(encoding='utf-8')
+          rules = Path('firestore.rules').read_text(encoding='utf-8')
+          fluxo = Path('fluxo-de-caixa.js').read_text(encoding='utf-8')
+          bank = Path('movimentacao-bancaria.js').read_text(encoding='utf-8')
+
+          for token in [
+              'sessionStorage', 'test.user@email.com', 'window.IS_TEST_RUN',
+              'where("senha"', "where('senha'", 'data-password=', '>Ver Senha<',
+              'senha: newPassword', 'Math.random('
+          ]:
+              assert token not in html, f'legacy auth pattern remains: {token}'
+
+          assert "return String(login ?? '');" in auth
+          assert "function accessIdToken(accessId)" in auth
+          assert "return `u${accessIdToken(accessId)}@${COMPANY_AUTH_DOMAIN}`;" in auth
+          assert 'assertLoginAvailable' in auth
+          assert auth.count('await assertLoginAvailable(') >= 3
+          assert "failures.push({ accessId: accessDoc.id, login: data.login" in auth
+          assert 'crypto.getRandomValues' in auth
+          assert 'senha: deleteField()' in auth
+          assert "error?.code === 'company-auth/login-in-use'" in html
+          assert 'Não publique as novas regras do Firestore' in html
+
+          assert 'activeNotificationPageCleanup' in notifications
+          assert "document.removeEventListener('view-shown', viewShownHandler)" in notifications
+          assert 'clearInterval(intervalId)' in notifications
+          assert 'unsubscribeSnapshot()' in notifications
+          assert 'escapeHtml(notification.message)' in notifications
+          assert 'safeMaterialIcon(notification.icon)' in notifications
+
+          assert 'const contasPorId = new Map' in reports
+          assert "lancamento.codigoPlanoDeContas || contasPorId.get(lancamento.categoriaId)?.codigo" in reports
+          assert 'escapeHtml(node.nome)' in reports
+          assert 'escapeHtml(t.descricao)' in fluxo
+          assert 'escapeHtml(mov.descricao' in bank
+
+          for token in [
+              '<span>${accountName}</span>', "${data.numeroDocumento || ''}</td>",
+              '${formaPagamentoText}</td>', '>${statusText}</span>',
+              '${mov.descricao}</td>', "${mov.origemDescricao || 'N/A'}</a>",
+              'value="Ref. Título ${originalReceitaData.numeroDocumento'
+          ]:
+              assert token not in html, f'unescaped dynamic HTML remains: {token}'
+
+          assert 'match /{subcollection}/{document=**}' in rules
+          assert 'match /users/{userId}' in rules
+          assert 'allow list: if false;' in rules
+          assert 'tenantMember(userId)' in rules
+          assert 'allow read, write: if false;' in rules
+          assert rules.count('{') == rules.count('}')
+
+          scripts = re.findall(r'<script type="module">(.*?)</script>', html, flags=re.S)
+          main_script = next((s for s in scripts if 'Importações do Firebase SDK' in s), None)
+          if not main_script:
+              raise RuntimeError('main inline module not found')
+          Path('/tmp/index-main.mjs').write_text(main_script, encoding='utf-8')
+          PY
+          node --check /tmp/index-main.mjs
+          git diff --check
+
+      - name: Compile Firestore rules in emulator
+        shell: bash
+        run: |
+          npx -y firebase-tools@latest emulators:exec --only firestore --project demo-erparc "echo firestore-rules-ok"
+
+      - name: Commit final compatibility changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add auth-company.js index.html
+          git diff --cached --quiet && exit 0
+          git commit -m "preserve legacy login compatibility and surface migration failures"
+          git push origin HEAD:fix/security-auth-reporting-hardening-v2
