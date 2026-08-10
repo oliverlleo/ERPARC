@@ -1,4 +1,5 @@
 import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp, Timestamp, orderBy, deleteDoc, writeBatch, updateDoc, doc, onSnapshot, limit } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { escapeHtml, safeCssTokenList, safeMaterialIcon } from './security-utils.js';
 
 // --- Notification Generation Logic ---
 
@@ -213,12 +214,21 @@ function checkAllNotifications(db, userId) {
  * @param {object} db - The Firestore database instance.
  * @param {string} userId - The ID of the user.
  */
+let activeNotificationCleanup = null;
+
+export function cleanupNotifications() {
+    if (activeNotificationCleanup) {
+        activeNotificationCleanup();
+        activeNotificationCleanup = null;
+    }
+}
+
 export function initializeNotifications(db, userId) {
-    if (!userId) return;
+    cleanupNotifications();
+    if (!userId) return () => {};
 
     checkAllNotifications(db, userId);
-    setInterval(() => checkAllNotifications(db, userId), 300000); // Check every 5 minutes
-
+    const intervalId = setInterval(() => checkAllNotifications(db, userId), 300000);
     let sidebarNotifications = [];
 
     const notificationsQuery = query(
@@ -226,10 +236,8 @@ export function initializeNotifications(db, userId) {
         orderBy('createdAt', 'desc'),
         limit(50)
     );
-
-    // Use onSnapshot to listen for real-time updates
-    onSnapshot(notificationsQuery, (querySnapshot) => {
-        sidebarNotifications = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const unsubscribeSnapshot = onSnapshot(notificationsQuery, (querySnapshot) => {
+        sidebarNotifications = querySnapshot.docs.map(snapshotDoc => ({ id: snapshotDoc.id, ...snapshotDoc.data() }));
         renderSidebarNotifications(sidebarNotifications, db, userId);
     });
 
@@ -238,64 +246,57 @@ export function initializeNotifications(db, userId) {
     const clearPinnedCheckbox = document.getElementById('clear-pinned-checkbox');
     const clearImportantCheckbox = document.getElementById('clear-important-checkbox');
 
-    if (clearButton) {
-        clearButton.addEventListener('click', async () => {
-            const clearPinned = clearPinnedCheckbox.checked;
-            const clearImportant = clearImportantCheckbox.checked;
-            const batch = writeBatch(db);
-            let notificationsToClearCount = 0;
+    const clearHandler = async () => {
+        const clearPinned = clearPinnedCheckbox?.checked === true;
+        const clearImportant = clearImportantCheckbox?.checked === true;
+        const batch = writeBatch(db);
+        let notificationsToClearCount = 0;
+        const visibleNotifications = sidebarNotifications.filter(n => n.clearedFromSidebar !== true);
 
-            const visibleNotifications = sidebarNotifications.filter(n => n.clearedFromSidebar !== true);
-
-            visibleNotifications.forEach(notification => {
-                const isPinned = notification.pinned === true;
-                const isImportant = notification.important === true;
-
-                if ((!isPinned || clearPinned) && (!isImportant || clearImportant)) {
-                    const docRef = doc(db, 'users', userId, 'notifications', notification.id);
-                    batch.update(docRef, { clearedFromSidebar: true });
-                    notificationsToClearCount++;
-                }
-            });
-
-            if (notificationsToClearCount > 0) {
-                try {
-                    await batch.commit();
-                } catch (error) {
-                    console.error("Error clearing notifications:", error);
-                }
+        visibleNotifications.forEach(notification => {
+            const isPinned = notification.pinned === true;
+            const isImportant = notification.important === true;
+            if ((!isPinned || clearPinned) && (!isImportant || clearImportant)) {
+                batch.update(doc(db, 'users', userId, 'notifications', notification.id), { clearedFromSidebar: true });
+                notificationsToClearCount++;
             }
         });
-    }
+        if (notificationsToClearCount > 0) await batch.commit();
+    };
 
-    if (notificationList) {
-        notificationList.addEventListener('click', async (e) => {
-            const container = e.target.closest('.notification-item-container');
-            if (!container) return;
+    const listHandler = async (e) => {
+        const container = e.target.closest('.notification-item-container');
+        if (!container) return;
+        const notificationId = container.dataset.id;
+        const notification = sidebarNotifications.find(n => n.id === notificationId);
+        if (!notification) return;
 
-            const notificationId = container.dataset.id;
-            const notification = sidebarNotifications.find(n => n.id === notificationId);
-            if (!notification) return;
+        const notificationRef = doc(db, 'users', userId, 'notifications', notificationId);
+        const pinButton = e.target.closest('.toggle-pin-btn');
+        const importantButton = e.target.closest('.toggle-important-btn');
+        const link = e.target.closest('.notification-item-link');
 
-            const notificationRef = doc(db, 'users', userId, 'notifications', notificationId);
-            const pinButton = e.target.closest('.toggle-pin-btn');
-            const importantButton = e.target.closest('.toggle-important-btn');
-            const link = e.target.closest('.notification-item-link');
+        if (pinButton) {
+            e.stopPropagation();
+            await updateDoc(notificationRef, { pinned: !notification.pinned });
+        } else if (importantButton) {
+            e.stopPropagation();
+            await updateDoc(notificationRef, { important: !notification.important });
+        } else if (link && !notification.read) {
+            await updateDoc(notificationRef, { read: true });
+        }
+    };
 
-            if (pinButton) {
-                e.stopPropagation();
-                await updateDoc(notificationRef, { pinned: !notification.pinned });
-            } else if (importantButton) {
-                e.stopPropagation();
-                await updateDoc(notificationRef, { important: !notification.important });
-            } else if (link) {
-                if (!notification.read) {
-                    await updateDoc(notificationRef, { read: true });
-                }
-                // Handle navigation logic if needed
-            }
-        });
-    }
+    clearButton?.addEventListener('click', clearHandler);
+    notificationList?.addEventListener('click', listHandler);
+
+    activeNotificationCleanup = () => {
+        clearInterval(intervalId);
+        unsubscribeSnapshot();
+        clearButton?.removeEventListener('click', clearHandler);
+        notificationList?.removeEventListener('click', listHandler);
+    };
+    return activeNotificationCleanup;
 }
 
 
@@ -356,14 +357,14 @@ function renderSidebarNotifications(notifications, db, userId) {
         item.dataset.id = notification.id;
 
         item.innerHTML = `
-            <a href="#" class="notification-item-link flex-grow" data-link="${notification.link || '#'}">
+            <a href="#" class="notification-item-link flex-grow" data-link="${escapeHtml(notification.link || '#')}">
                 <div class="flex items-start gap-4">
-                    <div class="notification-icon ${notification.iconClass || 'notification-icon-info'}">
-                        <span class="material-symbols-outlined">${notification.icon || 'notifications'}</span>
+                    <div class="notification-icon ${safeCssTokenList(notification.iconClass, 'notification-icon-info')}">
+                        <span class="material-symbols-outlined">${safeMaterialIcon(notification.icon)}</span>
                     </div>
                     <div class="notification-content">
-                        <p class="notification-text">${notification.message}</p>
-                        <p class="notification-time">${timeAgo}</p>
+                        <p class="notification-text">${escapeHtml(notification.message)}</p>
+                        <p class="notification-time">${escapeHtml(timeAgo)}</p>
                     </div>
                 </div>
             </a>
@@ -449,22 +450,22 @@ function renderFullNotificationList(groupedNotifications) {
             hasNotifications = true;
             const groupDiv = document.createElement('div');
             groupDiv.className = 'space-y-4';
-            groupDiv.innerHTML = `<h2 class="text-xl font-semibold text-gray-800">${groupName}</h2>`;
+            groupDiv.innerHTML = `<h2 class="text-xl font-semibold text-gray-800">${escapeHtml(groupName)}</h2>`;
 
             notifications.forEach(notif => {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = `p-4 rounded-lg border flex items-start gap-4 ${notif.read ? 'bg-white' : 'bg-blue-50 border-blue-200'}`;
                 itemDiv.innerHTML = `
-                    <div class="notification-icon ${notif.iconClass || 'notification-icon-info'}">
-                        <span class="material-symbols-outlined">${notif.icon || 'notifications'}</span>
+                    <div class="notification-icon ${safeCssTokenList(notif.iconClass, 'notification-icon-info')}">
+                        <span class="material-symbols-outlined">${safeMaterialIcon(notif.icon)}</span>
                     </div>
                     <div class="flex-grow">
-                        <p class="notification-text">${notif.message}</p>
+                        <p class="notification-text">${escapeHtml(notif.message)}</p>
                         <p class="notification-time">${notif.createdAt.toDate().toLocaleString('pt-BR')}</p>
                     </div>
                     <div class="flex items-center gap-2">
                         ${!notif.read ? '<div class="w-2 h-2 bg-blue-500 rounded-full" title="Não lida"></div>' : ''}
-                        <button class="delete-notification-btn p-1 rounded-full hover:bg-gray-200" data-id="${notif.id}">
+                        <button class="delete-notification-btn p-1 rounded-full hover:bg-gray-200" data-id="${escapeHtml(notif.id)}">
                             <span class="material-symbols-outlined text-base text-gray-500">delete</span>
                         </button>
                     </div>

@@ -1,5 +1,6 @@
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp, runTransaction, updateDoc, collectionGroup } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 import { fetchFinancialLedger, fetchDocumentsByIds, financialMovementDocId } from './financial-ledger.js';
+import { escapeHtml } from './security-utils.js';
 
 // This function will be called from the main script when the user is authenticated.
 export function initializeFluxoDeCaixa(db, userId, common) {
@@ -458,11 +459,11 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             tr.className = rowClass;
 
             tr.innerHTML = `
-                <td class="p-4"><input type="checkbox" class="fluxo-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${t.id}" data-parent-id="${t.parentId}" data-type="${t.type}" ${t.conciliado ? 'checked' : ''} ${t.isProjected ? 'disabled' : ''}></td>
+                <td class="p-4"><input type="checkbox" class="fluxo-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${escapeHtml(t.id)}" data-parent-id="${escapeHtml(t.parentId || '')}" data-type="${escapeHtml(t.type)}" ${t.conciliado ? 'checked' : ''} ${t.isProjected ? 'disabled' : ''}></td>
                 <td class="px-4 py-2 text-sm text-gray-700">${new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                <td class="px-4 py-2 text-sm text-gray-800">${t.descricao}</td>
-                <td class="px-4 py-2 text-sm text-gray-600">${t.participante}</td>
-                <td class="px-4 py-2 text-sm text-gray-600">${t.planoDeConta}</td>
+                <td class="px-4 py-2 text-sm text-gray-800">${escapeHtml(t.descricao)}</td>
+                <td class="px-4 py-2 text-sm text-gray-600">${escapeHtml(t.participante)}</td>
+                <td class="px-4 py-2 text-sm text-gray-600">${escapeHtml(t.planoDeConta)}</td>
                 <td class="px-4 py-2 text-sm text-gray-600">${new Date(t.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                 <td class="px-4 py-2 text-sm text-right ${t.isProjected ? 'text-blue-500' : 'text-green-600'}">${entrada > 0 ? formatCurrency(entrada) : ''}</td>
                 <td class="px-4 py-2 text-sm text-right ${t.isProjected ? 'text-blue-500' : 'text-red-600'}">${saida > 0 ? formatCurrency(saida) : ''}</td>
@@ -518,7 +519,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             }
 
             tr.innerHTML = `
-                <td class="px-6 py-3 text-sm ${isHeader ? 'font-bold text-gray-800' : (isSubHeader || isSubTotal ? 'font-semibold pl-10' : 'pl-14')}">${text}</td>
+                <td class="px-6 py-3 text-sm ${isHeader ? 'font-bold text-gray-800' : (isSubHeader || isSubTotal ? 'font-semibold pl-10' : 'pl-14')}">${escapeHtml(text)}</td>
                 <td class="px-6 py-3 text-sm text-right font-medium ${value < 0 ? 'text-red-600' : 'text-gray-800'}">${formatCurrency(value)}</td>
                 ${percentageHTML}
             `;

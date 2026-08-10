@@ -1,4 +1,5 @@
 import { collection, query, where, onSnapshot, doc, getDoc, writeBatch, runTransaction, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { escapeHtml } from './security-utils.js';
 import { ensureFinancialLedger, financialMovementDocId } from './financial-ledger.js';
 
 // This module will be initialized from the main script
@@ -149,11 +150,12 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
                 ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Conciliado</span>`
                 : `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-800">Pendente</span>`;
 
-            const descricaoHtml = isEstornado ? `<del>${mov.descricao}</del>` : mov.descricao;
-            const origemHtml = mov.origemId ? `<a href="#" class="text-blue-600 hover:underline view-origin-link" data-origin-id="${mov.origemId}" data-origin-type="${mov.origemTipo}">${mov.origemDescricao || 'Ver Origem'}</a>` : (mov.origemDescricao || 'N/A');
+            const descricaoSegura = escapeHtml(mov.descricao || '');
+            const descricaoHtml = isEstornado ? `<del>${descricaoSegura}</del>` : descricaoSegura;
+            const origemHtml = mov.origemId ? `<a href="#" class="text-blue-600 hover:underline view-origin-link" data-origin-id="${escapeHtml(mov.origemId)}" data-origin-type="${escapeHtml(mov.origemTipo || '')}">${escapeHtml(mov.origemDescricao || 'Ver Origem')}</a>` : escapeHtml(mov.origemDescricao || 'N/A');
 
             tr.innerHTML = `
-                <td class="p-4"><input type="checkbox" class="mov-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" data-id="${mov.id}" ${isEstornado ? 'disabled' : ''}></td>
+                <td class="p-4"><input type="checkbox" class="mov-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" data-id="${escapeHtml(mov.id)}" ${isEstornado ? 'disabled' : ''}></td>
                 <td class="px-4 py-2 text-sm">${new Date(mov.dataTransacao + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                 <td class="px-4 py-2 text-sm w-2/5">${descricaoHtml}</td>
                 <td class="px-4 py-2 text-sm">${origemHtml}</td>
