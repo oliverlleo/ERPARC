@@ -1,0 +1,106 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function companyIdentity() {
+      return signedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email.matches('.*@archsys-company\\.invalid$');
+    }
+
+    function primaryAdmin(userId) {
+      return signedIn() && request.auth.uid == userId && !companyIdentity();
+    }
+
+    function companyProfile() {
+      return get(/databases/$(database)/documents/accessProfiles/$(request.auth.uid));
+    }
+
+    function activeCompanyUserFor(userId) {
+      return companyIdentity()
+        && exists(/databases/$(database)/documents/accessProfiles/$(request.auth.uid))
+        && companyProfile().data.active == true
+        && companyProfile().data.adminId == userId;
+    }
+
+    function tenantMember(userId) {
+      return primaryAdmin(userId) || activeCompanyUserFor(userId);
+    }
+
+    match /users/{userId} {
+      allow read, create, update: if primaryAdmin(userId);
+      allow delete: if false;
+
+      match /{document=**} {
+        allow read, write: if tenantMember(userId);
+      }
+    }
+
+    // Company selector remains readable before authentication to preserve the
+    // existing login UX. Writes are restricted to the owning Firebase admin.
+    match /empresas/{empresaId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && !companyIdentity()
+        && request.resource.data.adminId == request.auth.uid;
+      allow update, delete: if signedIn()
+        && !companyIdentity()
+        && resource.data.adminId == request.auth.uid;
+    }
+
+    // Only administrators can inspect or mutate access metadata. Passwords are
+    // no longer stored here after the automatic Firebase Auth migration.
+    match /acessos/{accessId} {
+      allow read: if signedIn()
+        && !companyIdentity()
+        && resource.data.adminId == request.auth.uid;
+      allow create: if signedIn()
+        && !companyIdentity()
+        && request.resource.data.adminId == request.auth.uid;
+      allow update, delete: if signedIn()
+        && !companyIdentity()
+        && resource.data.adminId == request.auth.uid;
+    }
+
+    // Exact document gets are used only to translate empresa+login into the
+    // synthetic Firebase Auth email. Collection listing is deliberately denied.
+    match /loginDirectory/{directoryId} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if signedIn()
+        && !companyIdentity()
+        && request.resource.data.adminId == request.auth.uid;
+      allow update, delete: if signedIn()
+        && !companyIdentity()
+        && resource.data.adminId == request.auth.uid;
+    }
+
+    match /accessProfiles/{uid} {
+      allow read: if signedIn()
+        && (request.auth.uid == uid || resource.data.adminId == request.auth.uid);
+      allow create: if signedIn()
+        && !companyIdentity()
+        && request.resource.data.adminId == request.auth.uid;
+      allow update, delete: if signedIn()
+        && !companyIdentity()
+        && resource.data.adminId == request.auth.uid;
+
+      // A company user may only complete its own first-access password state;
+      // it cannot change tenant ownership, identity or permissions.
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['primeiroAcesso', 'passwordChangedAt', 'updatedAt'])
+        && request.resource.data.adminId == resource.data.adminId
+        && request.resource.data.empresaId == resource.data.empresaId
+        && request.resource.data.accessId == resource.data.accessId;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
