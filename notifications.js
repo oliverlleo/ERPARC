@@ -215,12 +215,19 @@ function checkAllNotifications(db, userId) {
  * @param {string} userId - The ID of the user.
  */
 let activeNotificationCleanup = null;
+let activeNotificationPageCleanup = null;
 
 export function cleanupNotifications() {
     if (activeNotificationCleanup) {
         activeNotificationCleanup();
         activeNotificationCleanup = null;
     }
+    if (activeNotificationPageCleanup) {
+        activeNotificationPageCleanup();
+        activeNotificationPageCleanup = null;
+    }
+    allNotifications = [];
+    notificationTypes.clear();
 }
 
 export function initializeNotifications(db, userId) {
@@ -517,7 +524,7 @@ function applyAndRenderFilters() {
     const typeFilter = document.getElementById('notification-type-filter').value;
 
     const filtered = allNotifications.filter(notif => {
-        const searchMatch = !searchInput || notif.message.toLowerCase().includes(searchInput);
+        const searchMatch = !searchInput || String(notif.message || '').toLowerCase().includes(searchInput);
         const statusMatch = statusFilter === 'all' || (statusFilter === 'read' && notif.read) || (statusFilter === 'unread' && !notif.read);
         const typeMatch = typeFilter === 'all' || notif.type === typeFilter;
         return searchMatch && statusMatch && typeMatch;
@@ -557,71 +564,74 @@ async function fetchAndDisplayAllNotifications(db, userId) {
  * @param {string} userId - The ID of the user.
  */
 export function initializeNotificationsPage(db, userId) {
-    if (!userId) return;
+    if (activeNotificationPageCleanup) {
+        activeNotificationPageCleanup();
+        activeNotificationPageCleanup = null;
+    }
+    if (!userId) return () => {};
 
     const markAllReadBtn = document.getElementById('mark-all-as-read-btn');
     const searchInput = document.getElementById('notification-search-input');
     const statusFilter = document.getElementById('notification-status-filter');
     const typeFilter = document.getElementById('notification-type-filter');
+    const container = document.getElementById('full-notification-list-container');
 
-    // Event listener for when the notifications page becomes visible
-    document.addEventListener('view-shown', (e) => {
+    const viewShownHandler = (e) => {
         if (e.detail.viewId === 'notifications-page') {
             fetchAndDisplayAllNotifications(db, userId);
         }
-    });
+    };
+    const filterHandler = () => applyAndRenderFilters();
+    const markAllReadHandler = async () => {
+        const unreadIds = allNotifications.filter(n => !n.read).map(n => n.id);
+        if (unreadIds.length === 0) {
+            alert('Todas as notificações já foram lidas.');
+            return;
+        }
 
-    // Add listeners for filter controls
-    if(searchInput) searchInput.addEventListener('input', applyAndRenderFilters);
-    if(statusFilter) statusFilter.addEventListener('change', applyAndRenderFilters);
-    if(typeFilter) typeFilter.addEventListener('change', applyAndRenderFilters);
-
-    // Add listener for "Mark all as read" button
-    if (markAllReadBtn) {
-        markAllReadBtn.addEventListener('click', async () => {
-            const unreadIds = allNotifications.filter(n => !n.read).map(n => n.id);
-            if (unreadIds.length === 0) {
-                alert("Todas as notificações já foram lidas.");
-                return;
-            }
-
-            const batch = writeBatch(db);
-            unreadIds.forEach(id => {
-                const docRef = doc(db, 'users', userId, 'notifications', id);
-                batch.update(docRef, { read: true });
-            });
-
-            try {
-                await batch.commit();
-                console.log("All notifications marked as read.");
-                // Refresh the view
-                fetchAndDisplayAllNotifications(db, userId);
-            } catch (error) {
-                console.error("Error marking all notifications as read:", error);
-            }
+        const batch = writeBatch(db);
+        unreadIds.forEach(id => {
+            batch.update(doc(db, 'users', userId, 'notifications', id), { read: true });
         });
-    }
 
-    // Add listener for deleting individual notifications
-    const container = document.getElementById('full-notification-list-container');
-    if (container) {
-        container.addEventListener('click', async (e) => {
-            const deleteButton = e.target.closest('.delete-notification-btn');
-            if (deleteButton) {
-                e.stopPropagation();
-                const notifId = deleteButton.dataset.id;
-                if (confirm("Tem certeza que deseja excluir esta notificação?")) {
-                    try {
-                        await deleteDoc(doc(db, 'users', userId, 'notifications', notifId));
-                        // Refresh list after deletion
-                        allNotifications = allNotifications.filter(n => n.id !== notifId);
-                        applyAndRenderFilters();
-                    } catch (error) {
-                        console.error("Error deleting notification:", error);
-                        alert("Não foi possível excluir a notificação.");
-                    }
-                }
-            }
-        });
-    }
+        try {
+            await batch.commit();
+            await fetchAndDisplayAllNotifications(db, userId);
+        } catch (error) {
+            console.error('Error marking all notifications as read:', error);
+        }
+    };
+    const containerClickHandler = async (e) => {
+        const deleteButton = e.target.closest('.delete-notification-btn');
+        if (!deleteButton) return;
+        e.stopPropagation();
+        const notifId = deleteButton.dataset.id;
+        if (!confirm('Tem certeza que deseja excluir esta notificação?')) return;
+
+        try {
+            await deleteDoc(doc(db, 'users', userId, 'notifications', notifId));
+            allNotifications = allNotifications.filter(n => n.id !== notifId);
+            applyAndRenderFilters();
+        } catch (error) {
+            console.error('Error deleting notification:', error);
+            alert('Não foi possível excluir a notificação.');
+        }
+    };
+
+    document.addEventListener('view-shown', viewShownHandler);
+    searchInput?.addEventListener('input', filterHandler);
+    statusFilter?.addEventListener('change', filterHandler);
+    typeFilter?.addEventListener('change', filterHandler);
+    markAllReadBtn?.addEventListener('click', markAllReadHandler);
+    container?.addEventListener('click', containerClickHandler);
+
+    activeNotificationPageCleanup = () => {
+        document.removeEventListener('view-shown', viewShownHandler);
+        searchInput?.removeEventListener('input', filterHandler);
+        statusFilter?.removeEventListener('change', filterHandler);
+        typeFilter?.removeEventListener('change', filterHandler);
+        markAllReadBtn?.removeEventListener('click', markAllReadHandler);
+        container?.removeEventListener('click', containerClickHandler);
+    };
+    return activeNotificationPageCleanup;
 }

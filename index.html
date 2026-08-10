@@ -4174,7 +4174,7 @@
             actionTd.className = 'px-6 py-4 whitespace-nowrap text-right text-sm font-medium';
             actionTd.innerHTML = `
                 <button class="text-indigo-600 hover:text-indigo-900 mr-4">Editar</button>
-                <button class="delete-btn text-red-600 hover:text-red-900" data-id="${doc.id}">Excluir</button>
+                <button class="delete-btn text-red-600 hover:text-red-900" data-id="${escapeHtml(doc.id)}">Excluir</button>
             `;
         });
 
@@ -4268,8 +4268,8 @@
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.cnpj)}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">${escapeHtml(data.codigo)}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button class="edit-empresa-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                                <button class="delete-btn text-red-600 hover:text-red-900" data-id="${doc.id}">Excluir</button>
+                                <button class="edit-empresa-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                                <button class="delete-btn text-red-600 hover:text-red-900" data-id="${escapeHtml(doc.id)}">Excluir</button>
                             </td>
                         `;
                     });
@@ -4318,8 +4318,8 @@
                     tr.innerHTML = `
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.nome)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button class="edit-usuario-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                            <button class="delete-btn text-red-600 hover:text-red-900" data-collection="systemUsers" data-id="${doc.id}">Excluir</button>
+                            <button class="edit-usuario-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                            <button class="delete-btn text-red-600 hover:text-red-900" data-collection="systemUsers" data-id="${escapeHtml(doc.id)}">Excluir</button>
                         </td>
                     `;
                 });
@@ -4409,8 +4409,8 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(cpfCnpj)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(contato)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button class="edit-fornecedor-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                        <button class="delete-btn text-red-600 hover:text-red-900" data-id="${doc.id}">Excluir</button>
+                        <button class="edit-fornecedor-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                        <button class="delete-btn text-red-600 hover:text-red-900" data-id="${escapeHtml(doc.id)}">Excluir</button>
                     </td>
                 `;
             });
@@ -4484,11 +4484,11 @@
                 const isRoot = node.isRoot === true;
 
                 el.innerHTML = `
-                    <span>${accountName}</span>
+                    <span>${escapeHtml(accountName)}</span>
                     <div class="space-x-2">
-                        <button title="Adicionar Sub-conta" class="add-sub-account-btn text-green-600 hover:text-green-800" data-id="${node.id}" ${node.inativo ? 'disabled' : ''}><span class="material-symbols-outlined text-base">add_circle</span></button>
-                        <button title="Editar" class="edit-plano-conta-btn text-blue-600 hover:text-blue-800" data-id="${node.id}" ${isRoot ? 'disabled' : ''}><span class="material-symbols-outlined text-base">edit</span></button>
-                        <button title="Excluir/Inativar" class="delete-plano-conta-btn text-red-600 hover:text-red-800" data-id="${node.id}" ${isRoot ? 'disabled' : ''}><span class="material-symbols-outlined text-base">delete</span></button>
+                        <button title="Adicionar Sub-conta" class="add-sub-account-btn text-green-600 hover:text-green-800" data-id="${escapeHtml(node.id)}" ${node.inativo ? 'disabled' : ''}><span class="material-symbols-outlined text-base">add_circle</span></button>
+                        <button title="Editar" class="edit-plano-conta-btn text-blue-600 hover:text-blue-800" data-id="${escapeHtml(node.id)}" ${isRoot ? 'disabled' : ''}><span class="material-symbols-outlined text-base">edit</span></button>
+                        <button title="Excluir/Inativar" class="delete-plano-conta-btn text-red-600 hover:text-red-800" data-id="${escapeHtml(node.id)}" ${isRoot ? 'disabled' : ''}><span class="material-symbols-outlined text-base">delete</span></button>
                     </div>
                 `;
                 return el;
@@ -4661,8 +4661,8 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.nome)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${formatCurrency(data.saldoInicial || 0)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button class="edit-conta-bancaria-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                            <button class="delete-btn text-red-600 hover:text-red-900" data-collection="contasBancarias" data-id="${doc.id}">Excluir</button>
+                            <button class="edit-conta-bancaria-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                            <button class="delete-btn text-red-600 hover:text-red-900" data-collection="contasBancarias" data-id="${escapeHtml(doc.id)}">Excluir</button>
                         </td>
                     `;
                 });
@@ -4712,8 +4712,8 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(cpfCnpj)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(contato)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button class="edit-cliente-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                        <button class="delete-btn text-red-600 hover:text-red-900" data-id="${doc.id}">Excluir</button>
+                        <button class="edit-cliente-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                        <button class="delete-btn text-red-600 hover:text-red-900" data-id="${escapeHtml(doc.id)}">Excluir</button>
                     </td>
                 `;
             });
@@ -4749,8 +4749,8 @@
                     tr.innerHTML = `
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.nome)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button class="edit-servico-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                            <button class="delete-btn text-red-600 hover:text-red-900" data-collection="servicos" data-id="${doc.id}">Excluir</button>
+                            <button class="edit-servico-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                            <button class="delete-btn text-red-600 hover:text-red-900" data-collection="servicos" data-id="${escapeHtml(doc.id)}">Excluir</button>
                         </td>
                     `;
                 });
@@ -4807,8 +4807,8 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.pessoal?.nomeCompleto || 'N/A')}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(data.contratual?.cargo || '')}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button class="edit-funcionario-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${doc.id}">Editar</button>
-                            <button class="delete-btn text-red-600 hover:text-red-900" data-id="${doc.id}">Excluir</button>
+                            <button class="edit-funcionario-btn text-indigo-600 hover:text-indigo-900 mr-4" data-id="${escapeHtml(doc.id)}">Editar</button>
+                            <button class="delete-btn text-red-600 hover:text-red-900" data-id="${escapeHtml(doc.id)}">Excluir</button>
                         </td>
                     `;
                 });
@@ -6704,13 +6704,13 @@
             tr.innerHTML = `
                 <td class="p-4">
                     <div class="flex items-center">
-                        <input type="checkbox" class="despesa-checkbox h-4 w-4 text-[var(--primary-color)] focus:ring-[var(--primary-color)] border-gray-300 rounded" data-id="${doc.id}">
+                        <input type="checkbox" class="despesa-checkbox h-4 w-4 text-[var(--primary-color)] focus:ring-[var(--primary-color)] border-gray-300 rounded" data-id="${escapeHtml(doc.id)}">
                     </div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.numeroDocumento || ''}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${escapeHtml(data.numeroDocumento || '')}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${escapeHtml(data.descricao)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${escapeHtml(data.favorecidoNome || 'N/A')}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${formaPagamentoText}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${escapeHtml(formaPagamentoText)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${new Date(data.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800 font-medium">${formatCurrency(valorOriginal)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-yellow-600 font-bold">${formatCurrency(totalDescontos)}</td>
@@ -7098,14 +7098,14 @@
 
                     let rowHTML;
                     if (isEstornado) {
-                        rowHTML = `<td class="p-4"><input type="checkbox" class="mov-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${mov.id}" disabled></td>` +
-                                  `<td colspan="7" class="px-4 py-2 text-sm text-gray-500"><del>${new Date(mov.dataTransacao + 'T00:00:00').toLocaleDateString('pt-BR')} - ${mov.descricao} [ESTORNADO]</del></td>`;
+                        rowHTML = `<td class="p-4"><input type="checkbox" class="mov-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${escapeHtml(mov.id)}" disabled></td>` +
+                                  `<td colspan="7" class="px-4 py-2 text-sm text-gray-500"><del>${new Date(mov.dataTransacao + 'T00:00:00').toLocaleDateString('pt-BR')} - ${escapeHtml(mov.descricao)} [ESTORNADO]</del></td>`;
                     } else {
                          rowHTML = `
-                            <td class="p-4"><input type="checkbox" class="mov-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${mov.id}"></td>
+                            <td class="p-4"><input type="checkbox" class="mov-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${escapeHtml(mov.id)}"></td>
                             <td class="px-4 py-2 text-sm">${new Date(mov.dataTransacao + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                            <td class="px-4 py-2 text-sm w-2/5">${mov.descricao}</td>
-                            <td class="px-4 py-2 text-sm"><a href="#" class="text-blue-600 hover:underline">${mov.origemDescricao || 'N/A'}</a></td>
+                            <td class="px-4 py-2 text-sm w-2/5">${escapeHtml(mov.descricao)}</td>
+                            <td class="px-4 py-2 text-sm"><a href="#" class="text-blue-600 hover:underline">${escapeHtml(mov.origemDescricao || 'N/A')}</a></td>
                             <td class="px-4 py-2 text-right text-sm text-green-600">${isEntrada ? formatCurrency(mov.valor) : ''}</td>
                             <td class="px-4 py-2 text-right text-sm text-red-600">${!isEntrada ? formatCurrency(Math.abs(mov.valor)) : ''}</td>
                             <td class="px-4 py-2 text-right text-sm font-bold">${formatCurrency(saldoCorrente)}</td>
@@ -7403,8 +7403,8 @@
                         <td class="px-4 py-2 text-sm">${formatCurrency(pData.descontosAplicados || 0)}</td>
                         <td class="px-4 py-2 text-sm">
                             <button class="estornar-btn text-red-500 hover:underline disabled:text-gray-400 disabled:cursor-not-allowed"
-                                    data-pagamento-id="${pagamentoDoc.id}"
-                                    data-despesa-id="${despesaId}"
+                                    data-pagamento-id="${escapeHtml(pagamentoDoc.id)}"
+                                    data-despesa-id="${escapeHtml(despesaId)}"
                                     ${isEstorno || isEstornado ? 'disabled' : ''}>
                                 Estornar
                             </button>
@@ -7434,7 +7434,7 @@
                             <td class="px-4 py-2 text-sm">${escapeHtml(installmentData.descricao)}</td>
                             <td class="px-4 py-2 text-sm">${new Date(installmentData.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                             <td class="px-4 py-2 text-sm">${formatCurrency(installmentData.valorOriginal)}</td>
-                            <td class="px-4 py-2 text-sm"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">${statusText}</span></td>
+                            <td class="px-4 py-2 text-sm"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">${escapeHtml(statusText)}</span></td>
                         `;
                         // Highlight the current row
                         if (doc.id === despesaId) {
@@ -8375,7 +8375,7 @@ function generateParcelasTable(numParcelas, saldoOriginal, descricaoOriginal) {
                 <td class="px-3 py-2 text-sm text-gray-500">${i + 1}</td>
                 <td class="px-3 py-2"><input type="text" class="form-input w-full desdobrar-valor-parcela" value="${fromCents(valorParcela)}"></td>
                 <td class="px-3 py-2"><input type="date" class="form-input w-full desdobrar-vencimento-parcela" value="${novaDataVencimento.toISOString().split('T')[0]}"></td>
-                <td class="px-3 py-2"><input type="text" class="form-input w-full desdobrar-descricao-parcela" value="Ref. Título ${originalReceitaData.numeroDocumento || originalReceitaData.id.substring(0,4)} - Parc. ${i + 1}/${numParcelas}"></td>
+                <td class="px-3 py-2"><input type="text" class="form-input w-full desdobrar-descricao-parcela" value="Ref. Título ${escapeHtml(originalReceitaData.numeroDocumento || originalReceitaData.id.substring(0,4))} - Parc. ${i + 1}/${numParcelas}"></td>
             </tr>`;
     }
 
@@ -8585,8 +8585,8 @@ function validateParcelasSum() {
                         <td class="px-4 py-2 text-sm">${formatCurrency(pData.descontosConcedidos || 0)}</td>
                         <td class="px-4 py-2 text-sm">
                              <button class="estornar-recebimento-btn text-red-500 hover:underline disabled:text-gray-400 disabled:cursor-not-allowed"
-                                     data-recebimento-id="${recebimentoDoc.id}"
-                                     data-receita-id="${receitaId}"
+                                     data-recebimento-id="${escapeHtml(recebimentoDoc.id)}"
+                                     data-receita-id="${escapeHtml(receitaId)}"
                                      ${isEstorno || isEstornado ? 'disabled' : ''}>
                                  Estornar
                              </button>
@@ -9089,8 +9089,8 @@ function validateParcelasSum() {
 
 
             tr.innerHTML = `
-                <td class="p-4"><input type="checkbox" class="receita-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${doc.id}"></td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.numeroDocumento || ''}</td>
+                <td class="p-4"><input type="checkbox" class="receita-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${escapeHtml(doc.id)}"></td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${escapeHtml(data.numeroDocumento || '')}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${escapeHtml(data.descricao)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${escapeHtml(data.clienteNome || 'N/A')}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${new Date((data.dataVencimento || data.vencimento) + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
@@ -9099,7 +9099,7 @@ function validateParcelasSum() {
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-orange-600 font-bold">${formatCurrency(totalJuros)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-bold">${formatCurrency(totalRecebido)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-bold">${formatCurrency(saldoPendente)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">${statusText}</span></td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">${escapeHtml(statusText)}</span></td>
             `;
         });
     }

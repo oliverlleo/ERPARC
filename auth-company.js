@@ -33,6 +33,17 @@ function authEmailForAccess(accessId) {
     return `${accessId}@${COMPANY_AUTH_DOMAIN}`;
 }
 
+async function assertLoginAvailable(db, empresaId, login, expectedAccessId = null) {
+    const ref = doc(db, 'loginDirectory', directoryId(empresaId, login));
+    const snap = await getDoc(ref);
+    if (snap.exists() && snap.data().accessId !== expectedAccessId) {
+        const error = new Error('Já existe um acesso com este nome de login nesta empresa.');
+        error.code = 'company-auth/login-in-use';
+        throw error;
+    }
+    return ref;
+}
+
 export function isCompanyAuthEmail(email) {
     return String(email ?? '').toLowerCase().endsWith(`@${COMPANY_AUTH_DOMAIN}`);
 }
@@ -111,6 +122,7 @@ export async function createCompanyAccess({
     tempPassword
 }) {
     const accessRef = doc(collection(db, 'acessos'));
+    const directoryRef = await assertLoginAvailable(db, empresaId, login);
     const authEmail = authEmailForAccess(accessRef.id);
     let createdUser = null;
 
@@ -122,7 +134,6 @@ export async function createCompanyAccess({
 
         const batch = writeBatch(db);
         const profileRef = doc(db, 'accessProfiles', createdUser.uid);
-        const directoryRef = doc(db, 'loginDirectory', directoryId(empresaId, login));
 
         batch.set(accessRef, {
             login,
@@ -177,7 +188,7 @@ export async function updateCompanyAccessLogin({ db, accessId, login }) {
 
     const current = accessSnap.data();
     const oldDirectoryRef = doc(db, 'loginDirectory', directoryId(current.empresaId, current.login));
-    const newDirectoryRef = doc(db, 'loginDirectory', directoryId(current.empresaId, login));
+    const newDirectoryRef = await assertLoginAvailable(db, current.empresaId, login, accessId);
 
     const batch = writeBatch(db);
     batch.update(accessRef, {
@@ -224,6 +235,7 @@ async function migrateOneLegacyAccess({ db, firebaseConfig, accessDoc }) {
         throw new Error(`Acesso ${accessDoc.id} sem empresa/admin/login.`);
     }
 
+    const directoryRef = await assertLoginAvailable(db, data.empresaId, data.login, accessDoc.id);
     const authEmail = data.authEmail || authEmailForAccess(accessDoc.id);
     let authUid = data.authUid || null;
     let createdCredential = null;
@@ -260,7 +272,7 @@ async function migrateOneLegacyAccess({ db, firebaseConfig, accessDoc }) {
         login: data.login,
         primeiroAcesso: data.primeiroAcesso
     }), { merge: true });
-    batch.set(doc(db, 'loginDirectory', directoryId(data.empresaId, data.login)), directoryData({
+    batch.set(directoryRef, directoryData({
         accessId: accessDoc.id,
         adminId: data.adminId,
         empresaId: data.empresaId,
