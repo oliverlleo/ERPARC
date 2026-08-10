@@ -22,15 +22,19 @@ import {
 const COMPANY_AUTH_DOMAIN = 'archsys-company.invalid';
 
 export function normalizeCompanyLogin(login) {
-    return String(login ?? '').normalize('NFKC').trim().toLowerCase();
+    return String(login ?? '');
 }
 
 function directoryId(empresaId, login) {
     return `${empresaId}__${encodeURIComponent(normalizeCompanyLogin(login))}`;
 }
 
+function accessIdToken(accessId) {
+    return Array.from(String(accessId), char => char.codePointAt(0).toString(16).padStart(2, '0')).join('');
+}
+
 function authEmailForAccess(accessId) {
-    return `${accessId}@${COMPANY_AUTH_DOMAIN}`;
+    return `u${accessIdToken(accessId)}@${COMPANY_AUTH_DOMAIN}`;
 }
 
 async function assertLoginAvailable(db, empresaId, login, expectedAccessId = null) {
@@ -296,7 +300,7 @@ export async function migrateLegacyCompanyAccesses({ db, firebaseConfig, adminId
             migrated++;
         } catch (error) {
             console.error('Falha ao migrar acesso legado:', accessDoc.id, error);
-            failures.push({ accessId: accessDoc.id, message: error?.message || String(error) });
+            failures.push({ accessId: accessDoc.id, login: data.login, message: error?.message || String(error) });
         }
     }
 
