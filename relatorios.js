@@ -1,9 +1,39 @@
 import { getFirestore, collection, query, where, getDocs, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { escapeHtml } from './security-utils.js';
+import { classifyOverdueBucket } from './financial-rules.js';
 
 export function initializeRelatorios(db, userId, common) {
     if (!userId) return;
 
     const { formatCurrency, toCents, fromCents, showFeedback } = common;
+
+    function getReceivableBalance(data) {
+        const original = Number(data.valorOriginal ?? data.valor ?? 0);
+        const received = Number(data.totalRecebido ?? 0);
+        const juros = Number(data.totalJuros ?? 0);
+        const descontos = Number(data.totalDescontos ?? 0);
+        return Number(data.saldoPendente ?? (original + juros - received - descontos));
+    }
+
+    function getPayableBalance(data) {
+        const original = Number(data.valorOriginal ?? data.valor ?? 0);
+        const paid = Number(data.totalPago ?? data.valorPago ?? 0);
+        const juros = Number(data.totalJuros ?? 0);
+        const descontos = Number(data.totalDescontos ?? 0);
+        return Number(data.valorSaldo ?? (original + juros - paid - descontos));
+    }
+
+    function getDerivedStatus(data, kind) {
+        const balance = kind === 'pagar' ? getPayableBalance(data) : getReceivableBalance(data);
+        const principal = Number(data[kind === 'pagar' ? 'totalPago' : 'totalRecebido'] ?? 0);
+        if (balance <= 0) return kind === 'pagar' ? 'Pago' : 'Recebido';
+        if (principal > 0) return kind === 'pagar' ? 'Pago Parcialmente' : 'Recebido Parcialmente';
+        const dueValue = kind === 'pagar' ? data.vencimento : (data.dataVencimento || data.vencimento);
+        const dueDate = dueValue ? new Date(`${dueValue}T00:00:00`) : null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return dueDate && !Number.isNaN(dueDate.getTime()) && dueDate < today ? 'Vencido' : 'Pendente';
+    }
 
     // --- Elementos Comuns ---
     const relatorioTabLinks = document.querySelectorAll('.relatorio-tab-link');
@@ -89,21 +119,27 @@ export function initializeRelatorios(db, userId, common) {
             case 'posicao-carteira':
                 dadosParaRenderizar = (filtros.status === 'todos')
                     ? relatorioDadosBase
-                    : relatorioDadosBase.filter(d => d.status === filtros.status);
+                    : relatorioDadosBase.filter(d => getDerivedStatus(d, 'receber') === filtros.status);
                 visualizacaoAreaReceber.innerHTML = renderPosicaoCarteira(dadosParaRenderizar);
                 break;
             case 'inadimplencia':
-                dadosParaRenderizar = relatorioDadosBase.filter(d => d.status === 'Pendente' || d.status === 'Vencido' || d.status === 'Recebido Parcialmente');
+                dadosParaRenderizar = relatorioDadosBase.filter(d => {
+                    const status = getDerivedStatus(d, 'receber');
+                    return status === 'Pendente' || status === 'Vencido' || status === 'Recebido Parcialmente';
+                });
                 visualizacaoAreaReceber.innerHTML = renderInadimplencia(dadosParaRenderizar);
                 break;
             case 'previsao':
-                dadosParaRenderizar = relatorioDadosBase.filter(d => d.status === 'Pendente' || d.status === 'Recebido Parcialmente');
+                dadosParaRenderizar = relatorioDadosBase.filter(d => {
+                    const status = getDerivedStatus(d, 'receber');
+                    return status === 'Pendente' || status === 'Recebido Parcialmente';
+                });
                 visualizacaoAreaReceber.innerHTML = renderPrevisaoRecebimentos(dadosParaRenderizar);
                 break;
             case 'fluxo-caixa-dre':
                 const planosDeContasQuery = query(collection(db, `users/${userId}/planosDeContas`));
                 const planosDeContasSnap = await getDocs(planosDeContasQuery);
-                const planosDeContas = planosDeContasSnap.docs.map(doc => doc.data());
+                const planosDeContas = planosDeContasSnap.docs.map(snapshotDoc => ({ id: snapshotDoc.id, ...snapshotDoc.data() }));
                 const tree = buildCashFlowTree(planosDeContas, relatorioDadosBase);
                 visualizacaoAreaReceber.innerHTML = renderFluxoDeCaixa(tree);
                 dadosParaRenderizar = relatorioDadosBase; // for export button logic
@@ -146,7 +182,7 @@ export function initializeRelatorios(db, userId, common) {
         };
 
         dadosComAtraso.forEach(d => {
-            const saldo = d.saldoPendente || 0;
+            const saldo = getReceivableBalance(d);
             if (d.diasAtraso <= 30) {
                 buckets['30'].items.push(d);
                 buckets['30'].total += saldo;
@@ -188,10 +224,10 @@ export function initializeRelatorios(db, userId, common) {
             bucket.items.sort((a, b) => b.diasAtraso - a.diasAtraso).forEach(d => {
                 bucketHtml += `
                     <tr>
-                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${d.clienteNome}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.clienteNome)}</td>
                         <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${new Date(d.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-4 py-2 whitespace-nowrap text-sm text-center font-semibold text-red-700">${d.diasAtraso}</td>
-                        <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">${formatCurrency(d.saldoPendente)}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">${formatCurrency(getReceivableBalance(d))}</td>
                     </tr>`;
             });
 
@@ -225,9 +261,9 @@ export function initializeRelatorios(db, userId, common) {
             if (!categorias[categoriaId]) {
                 categorias[categoriaId] = { nome: categoriaNome, total: 0, recebido: 0, aReceber: 0 };
             }
-            categorias[categoriaId].total += d.valorOriginal || 0;
-            categorias[categoriaId].recebido += d.totalRecebido || 0;
-            categorias[categoriaId].aReceber += d.saldoPendente || 0;
+            categorias[categoriaId].total += Number(d.valorOriginal ?? d.valor ?? 0);
+            categorias[categoriaId].recebido += Number(d.totalRecebido ?? 0);
+            categorias[categoriaId].aReceber += getReceivableBalance(d);
         });
 
         let html = `
@@ -247,7 +283,7 @@ export function initializeRelatorios(db, userId, common) {
             const cat = categorias[id];
             html += `
                 <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${cat.nome}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${escapeHtml(cat.nome)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${formatCurrency(cat.total)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-green-600">${formatCurrency(cat.recebido)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-blue-600">${formatCurrency(cat.aReceber)}</td>
@@ -261,16 +297,17 @@ export function initializeRelatorios(db, userId, common) {
 
     function renderPrevisaoRecebimentos(dados) {
         const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
         const previsoes = {};
 
         dados.forEach(d => {
             const dataVencimento = new Date(d.dataVencimento + 'T00:00:00');
-            if (dataVencimento >= hoje) {
+            if (!Number.isNaN(dataVencimento.getTime()) && dataVencimento >= hoje) {
                 const mesAno = `${dataVencimento.getFullYear()}-${String(dataVencimento.getMonth() + 1).padStart(2, '0')}`;
                 if (!previsoes[mesAno]) {
                     previsoes[mesAno] = { total: 0, items: [] };
                 }
-                previsoes[mesAno].total += d.saldoPendente || 0;
+                previsoes[mesAno].total += getReceivableBalance(d);
                 previsoes[mesAno].items.push(d);
             }
         });
@@ -308,10 +345,10 @@ export function initializeRelatorios(db, userId, common) {
             previsoes[mesAno].items.forEach(item => {
                 html += `
                     <tr class="border-b">
-                        <td class="px-3 py-2">${item.clienteNome}</td>
-                        <td class="px-3 py-2">${item.descricao}</td>
+                        <td class="px-3 py-2">${escapeHtml(item.clienteNome)}</td>
+                        <td class="px-3 py-2">${escapeHtml(item.descricao)}</td>
                         <td class="px-3 py-2">${new Date(item.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                        <td class="px-3 py-2 text-right">${formatCurrency(item.saldoPendente)}</td>
+                        <td class="px-3 py-2 text-right">${formatCurrency(getReceivableBalance(item))}</td>
                     </tr>
                 `;
             });
@@ -348,11 +385,11 @@ export function initializeRelatorios(db, userId, common) {
 
                 html += `
                     <tr>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.clienteNome}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.descricao}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.clienteNome)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.descricao)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${new Date(d.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${formatCurrency(d.valorOriginal)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">${formatCurrency(d.saldoPendente)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">${formatCurrency(getReceivableBalance(d))}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-center">
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">
                                 ${statusText}
@@ -383,17 +420,23 @@ export function initializeRelatorios(db, userId, common) {
                 visualizacaoAreaPagar.innerHTML = renderPosicaoCarteiraPagar(dadosParaRenderizar);
                 break;
             case 'analise-atraso':
-                 dadosParaRenderizar = dadosFiltrados.filter(d => d.status === 'Pendente' || d.status === 'Vencido' || d.status === 'Pago Parcialmente');
+                 dadosParaRenderizar = dadosFiltrados.filter(d => {
+                     const status = getDerivedStatus(d, 'pagar');
+                     return status === 'Pendente' || status === 'Vencido' || status === 'Pago Parcialmente';
+                 });
                  visualizacaoAreaPagar.innerHTML = renderAnaliseAtraso(dadosParaRenderizar);
                 break;
             case 'previsao-desembolsos':
-                dadosParaRenderizar = dadosFiltrados.filter(d => d.status === 'Pendente' || d.status === 'Pago Parcialmente');
+                dadosParaRenderizar = dadosFiltrados.filter(d => {
+                    const status = getDerivedStatus(d, 'pagar');
+                    return status === 'Pendente' || status === 'Pago Parcialmente';
+                });
                 visualizacaoAreaPagar.innerHTML = renderPrevisaoDesembolsos(dadosParaRenderizar);
                 break;
             case 'fluxo-caixa-dre':
                 const planosDeContasQuery = query(collection(db, `users/${userId}/planosDeContas`));
                 const planosDeContasSnap = await getDocs(planosDeContasQuery);
-                const planosDeContas = planosDeContasSnap.docs.map(doc => doc.data());
+                const planosDeContas = planosDeContasSnap.docs.map(snapshotDoc => ({ id: snapshotDoc.id, ...snapshotDoc.data() }));
                 const tree = buildCashFlowTree(planosDeContas, dadosFiltrados);
                 visualizacaoAreaPagar.innerHTML = renderFluxoDeCaixa(tree);
                 dadosParaRenderizar = dadosFiltrados;
@@ -435,12 +478,12 @@ export function initializeRelatorios(db, userId, common) {
 
                 html += `
                     <tr>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.numeroDocumento || 'N/A'}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.descricao}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.favorecidoNome}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.numeroDocumento || 'N/A')}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.descricao)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.favorecidoNome)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${new Date(d.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${formatCurrency(d.valorOriginal)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">${formatCurrency(d.valorSaldo)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">${formatCurrency(getPayableBalance(d))}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-center">
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">
                                 ${statusText}
@@ -481,18 +524,17 @@ export function initializeRelatorios(db, userId, common) {
         };
 
         dadosComAtraso.forEach(d => {
-            const saldo = d.valorSaldo || 0;
-            if (d.diasAtraso <= 30) buckets['30'].total += saldo;
-            else if (d.diasAtraso <= 60) buckets['60'].total += saldo;
-            else if (d.diasAtraso <= 90) buckets['90'].total += saldo;
-            else buckets['91+'].total += saldo;
+            const saldo = getPayableBalance(d);
+            const bucket = classifyOverdueBucket(d.diasAtraso);
+            if (bucket) buckets[bucket].total += saldo;
         });
 
-        let html = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">';
+        let html = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">';
         const bucketData = [
             { label: 'Todos', key: 'todos', color: 'blue' },
             { label: 'Vencidos até 30 dias', key: '30', color: 'yellow' },
             { label: 'Vencidos de 31 a 60 dias', key: '60', color: 'orange' },
+            { label: 'Vencidos de 61 a 90 dias', key: '90', color: 'amber' },
             { label: 'Vencidos há mais de 90 dias', key: '91+', color: 'red' }
         ];
 
@@ -532,11 +574,11 @@ export function initializeRelatorios(db, userId, common) {
         dadosComAtraso.forEach(d => {
             html += `
                 <tr class="atraso-item" data-dias-atraso="${d.diasAtraso}">
-                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${d.favorecidoNome}</td>
-                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${d.descricao}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.favorecidoNome)}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.descricao)}</td>
                     <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${new Date(d.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                     <td class="px-4 py-2 whitespace-nowrap text-sm text-center font-semibold text-red-700">${d.diasAtraso}</td>
-                    <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">${formatCurrency(d.valorSaldo)}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">${formatCurrency(getPayableBalance(d))}</td>
                 </tr>
             `;
         });
@@ -547,15 +589,18 @@ export function initializeRelatorios(db, userId, common) {
     }
 
     function renderPrevisaoDesembolsos(dados) {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
         const previsoes = {};
 
         dados.forEach(d => {
             const dataVencimento = new Date(d.vencimento + 'T00:00:00');
+            if (Number.isNaN(dataVencimento.getTime()) || dataVencimento < hoje) return;
             const mesAno = `${dataVencimento.getFullYear()}-${String(dataVencimento.getMonth() + 1).padStart(2, '0')}`;
             if (!previsoes[mesAno]) {
                 previsoes[mesAno] = { total: 0, items: [] };
             }
-            previsoes[mesAno].total += d.valorSaldo || 0;
+                previsoes[mesAno].total += getPayableBalance(d);
             previsoes[mesAno].items.push(d);
         });
 
@@ -592,10 +637,10 @@ export function initializeRelatorios(db, userId, common) {
             previsoes[mesAno].items.forEach(item => {
                 html += `
                     <tr class="border-b">
-                        <td class="px-3 py-2">${item.favorecidoNome}</td>
-                        <td class="px-3 py-2">${item.descricao}</td>
+                        <td class="px-3 py-2">${escapeHtml(item.favorecidoNome)}</td>
+                        <td class="px-3 py-2">${escapeHtml(item.descricao)}</td>
                         <td class="px-3 py-2">${new Date(item.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                        <td class="px-3 py-2 text-right">${formatCurrency(item.valorSaldo)}</td>
+                        <td class="px-3 py-2 text-right">${formatCurrency(getPayableBalance(item))}</td>
                     </tr>
                 `;
             });
@@ -618,9 +663,9 @@ export function initializeRelatorios(db, userId, common) {
             if (!categorias[categoriaId]) {
                 categorias[categoriaId] = { nome: categoriaNome, totalOriginal: 0, totalPago: 0, aPagar: 0 };
             }
-            categorias[categoriaId].totalOriginal += d.valorOriginal || 0;
-            categorias[categoriaId].totalPago += d.totalPago || 0;
-            categorias[categoriaId].aPagar += d.valorSaldo || 0;
+            categorias[categoriaId].totalOriginal += Number(d.valorOriginal ?? d.valor ?? 0);
+            categorias[categoriaId].totalPago += Number(d.totalPago ?? d.valorPago ?? 0);
+            categorias[categoriaId].aPagar += getPayableBalance(d);
         });
 
         let html = `
@@ -639,7 +684,7 @@ export function initializeRelatorios(db, userId, common) {
         Object.values(categorias).sort((a,b) => b.totalOriginal - a.totalOriginal).forEach(cat => {
             html += `
                 <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${cat.nome}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${escapeHtml(cat.nome)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-bold">${formatCurrency(cat.totalOriginal)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-green-600">${formatCurrency(cat.totalPago)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-red-600">${formatCurrency(cat.aPagar)}</td>
@@ -685,7 +730,7 @@ export function initializeRelatorios(db, userId, common) {
 
         } catch (error) {
             console.error("Erro ao gerar relatório de Contas a Pagar:", error);
-            visualizacaoAreaPagar.innerHTML = `<p class="text-center text-red-500 py-12">Erro ao carregar o relatório: ${error.message}</p>`;
+            visualizacaoAreaPagar.innerHTML = `<p class="text-center text-red-500 py-12">Erro ao carregar o relatório: ${escapeHtml(error.message)}</p>`;
         } finally {
             gerarRelatorioPagarBtn.disabled = false;
             gerarRelatorioPagarBtn.innerHTML = '<span class="material-symbols-outlined text-base mr-2">analytics</span> Gerar Relatório';
@@ -727,7 +772,7 @@ export function initializeRelatorios(db, userId, common) {
 
         } catch (error) {
             console.error("Erro ao gerar relatório:", error);
-            visualizacaoAreaReceber.innerHTML = `<p class="text-center text-red-500 py-12">Erro ao carregar o relatório: ${error.message}</p>`;
+            visualizacaoAreaReceber.innerHTML = `<p class="text-center text-red-500 py-12">Erro ao carregar o relatório: ${escapeHtml(error.message)}</p>`;
         } finally {
             gerarRelatorioReceberBtn.disabled = false;
             gerarRelatorioReceberBtn.innerHTML = '<span class="material-symbols-outlined text-base mr-2">analytics</span> Gerar Relatório';
@@ -813,13 +858,10 @@ export function initializeRelatorios(db, userId, common) {
                     show = true;
                     break;
                 case '30':
-                    show = diasAtraso <= 30;
-                    break;
                 case '60':
-                    show = diasAtraso > 30 && diasAtraso <= 60;
-                    break;
+                case '90':
                 case '91+':
-                    show = diasAtraso > 60; // Adjusted logic to match the bucket label
+                    show = classifyOverdueBucket(diasAtraso) === bucket;
                     break;
             }
             row.style.display = show ? '' : 'none';
@@ -832,11 +874,47 @@ export function initializeRelatorios(db, userId, common) {
 
 
     // --- Exportação ---
+    function csvEscape(value) {
+        const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+        return `"${text.replace(/"/g, '""')}"`;
+    }
+
+    function exportarRelatorioComoCsv(container, filename) {
+        const tables = Array.from(container.querySelectorAll('table'));
+        if (tables.length === 0) {
+            const feedback = document.createElement('p');
+            feedback.className = 'text-center text-red-600 text-sm py-4';
+            feedback.textContent = 'Gere um relatório antes de exportar.';
+            container.appendChild(feedback);
+            window.setTimeout(() => feedback.remove(), 5000);
+            return;
+        }
+
+        const rows = [];
+        tables.forEach((table, tableIndex) => {
+            if (tableIndex > 0) rows.push([]);
+            table.querySelectorAll('tr').forEach(row => {
+                rows.push(Array.from(row.querySelectorAll('th, td')).map(cell => csvEscape(cell.textContent)));
+            });
+        });
+
+        const csv = '\uFEFF' + rows.map(row => row.join(';')).join('\r\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    }
+
     exportarRelatorioReceberBtn.addEventListener('click', () => {
-         alert('Funcionalidade de exportação em desenvolvimento.');
+        exportarRelatorioComoCsv(visualizacaoAreaReceber, 'relatorio-contas-a-receber.csv');
     });
-     exportarRelatorioPagarBtn.addEventListener('click', () => {
-         alert('Funcionalidade de exportação em desenvolvimento.');
+    exportarRelatorioPagarBtn.addEventListener('click', () => {
+        exportarRelatorioComoCsv(visualizacaoAreaPagar, 'relatorio-contas-a-pagar.csv');
     });
 
 
@@ -860,6 +938,7 @@ export function initializeRelatorios(db, userId, common) {
 
     function buildCashFlowTree(planosDeContas, lancamentos) {
         const tree = {};
+        const contasPorId = new Map(planosDeContas.map(conta => [conta.id, conta]));
 
         // Initialize tree with all accounts from planoDeContas
         planosDeContas.forEach(conta => {
@@ -873,9 +952,9 @@ export function initializeRelatorios(db, userId, common) {
 
         // Populate items and calculate totals for each account
         lancamentos.forEach(lancamento => {
-            const codigo = lancamento.codigoPlanoDeContas;
-            if (tree[codigo]) {
-                const valor = lancamento.valorOriginal || lancamento.valor || 0;
+            const codigo = lancamento.codigoPlanoDeContas || contasPorId.get(lancamento.categoriaId)?.codigo;
+            if (codigo && tree[codigo]) {
+                const valor = Number(lancamento.valorOriginal ?? lancamento.valor ?? 0);
                 tree[codigo].items.push(lancamento);
                 tree[codigo].total += valor;
             }
@@ -923,11 +1002,11 @@ export function initializeRelatorios(db, userId, common) {
             const displayStyle = isVisible ? '' : 'display: none;';
 
             html += `
-                <tr class="dre-row ${rowClass}" data-id="${node.codigo}" data-parent-id="${node.codigoPai || ''}" style="${displayStyle}">
+                <tr class="dre-row ${rowClass}" data-id="${escapeHtml(node.codigo)}" data-parent-id="${escapeHtml(node.codigoPai || '')}" style="${displayStyle}">
                     <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700" style="padding-left: ${paddingLeft + 16}px;">
                         <div class="flex items-center">
                             ${hasChildren ? `<span class="dre-toggle-icon material-symbols-outlined text-base cursor-pointer mr-2 transition-transform">chevron_right</span>` : '<span class="w-6 mr-2"></span>'}
-                            <span>${node.codigo} - ${node.nome}</span>
+                            <span>${escapeHtml(node.codigo)} - ${escapeHtml(node.nome)}</span>
                         </div>
                     </td>
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-right font-mono">${formatCurrency(node.total)}</td>

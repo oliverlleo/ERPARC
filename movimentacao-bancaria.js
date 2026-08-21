@@ -1,4 +1,6 @@
 import { collection, query, where, onSnapshot, doc, getDoc, writeBatch, runTransaction, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { escapeHtml } from './security-utils.js';
+import { ensureFinancialLedger, financialMovementDocId } from './financial-ledger.js';
 
 // This module will be initialized from the main script
 export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName) {
@@ -148,11 +150,12 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
                 ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Conciliado</span>`
                 : `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-800">Pendente</span>`;
 
-            const descricaoHtml = isEstornado ? `<del>${mov.descricao}</del>` : mov.descricao;
-            const origemHtml = mov.origemId ? `<a href="#" class="text-blue-600 hover:underline view-origin-link" data-origin-id="${mov.origemId}" data-origin-type="${mov.origemTipo}">${mov.origemDescricao || 'Ver Origem'}</a>` : (mov.origemDescricao || 'N/A');
+            const descricaoSegura = escapeHtml(mov.descricao || '');
+            const descricaoHtml = isEstornado ? `<del>${descricaoSegura}</del>` : descricaoSegura;
+            const origemHtml = mov.origemId ? `<a href="#" class="text-blue-600 hover:underline view-origin-link" data-origin-id="${escapeHtml(mov.origemId)}" data-origin-type="${escapeHtml(mov.origemTipo || '')}">${escapeHtml(mov.origemDescricao || 'Ver Origem')}</a>` : escapeHtml(mov.origemDescricao || 'N/A');
 
             tr.innerHTML = `
-                <td class="p-4"><input type="checkbox" class="mov-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" data-id="${mov.id}" ${isEstornado ? 'disabled' : ''}></td>
+                <td class="p-4"><input type="checkbox" class="mov-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" data-id="${escapeHtml(mov.id)}" ${isEstornado ? 'disabled' : ''}></td>
                 <td class="px-4 py-2 text-sm">${new Date(mov.dataTransacao + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                 <td class="px-4 py-2 text-sm w-2/5">${descricaoHtml}</td>
                 <td class="px-4 py-2 text-sm">${origemHtml}</td>
@@ -224,14 +227,29 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
         const selectedIds = getSelectedMovimentacaoIds();
         if (selectedIds.length === 0) return;
 
+        await ensureFinancialLedger(db, userId);
         const batch = writeBatch(db);
         selectedIds.forEach(id => {
             const ref = doc(db, `users/${userId}/movimentacoesBancarias`, id);
-            batch.update(ref, {
+            const reconciliationData = {
                 conciliado: conciliar,
                 dataConciliacao: conciliar ? new Date().toISOString().split('T')[0] : null,
-                usuarioConciliacao: conciliar ? "currentUserName" : null // Replace with actual user name
-            });
+                usuarioConciliacao: conciliar ? currentUserName : null
+            };
+            batch.update(ref, reconciliationData);
+
+            const movement = allMovimentacoes.find(item => item.id === id);
+            const ledgerType = movement?.origemTipo === 'PAGAMENTO_DESPESA'
+                ? 'pagamento'
+                : (movement?.origemTipo === 'RECEBIMENTO_RECEITA' ? 'recebimento' : null);
+            if (ledgerType && movement.origemParentId && movement.origemId) {
+                const ledgerRef = doc(
+                    db,
+                    `users/${userId}/movimentacoesFinanceiras`,
+                    financialMovementDocId(ledgerType, movement.origemParentId, movement.origemId)
+                );
+                batch.update(ledgerRef, reconciliationData);
+            }
         });
 
         try {
@@ -261,6 +279,7 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
         const movRef = doc(db, `users/${userId}/movimentacoesBancarias`, movId);
 
         try {
+            await ensureFinancialLedger(db, userId);
             await runTransaction(db, async (transaction) => {
                 // 1. LÊ OS DOCUMENTOS NECESSÁRIOS
                 const movDoc = await transaction.get(movRef);
@@ -274,9 +293,21 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
                     return; // Fim da operação para lançamentos manuais
                 }
 
+                const ledgerType = movData.origemTipo === 'PAGAMENTO_DESPESA'
+                    ? 'pagamento'
+                    : (movData.origemTipo === 'RECEBIMENTO_RECEITA' ? 'recebimento' : null);
+                const financialLedgerRef = ledgerType
+                    ? doc(
+                        db,
+                        `users/${userId}/movimentacoesFinanceiras`,
+                        financialMovementDocId(ledgerType, movData.origemParentId, movData.origemId)
+                    )
+                    : null;
+
                 // Se tiver a "ponte", continua para reverter a despesa/receita
-                const parentCollection = movData.origemTipo === 'PAGAMENTO_DESPESA' ? 'despesas' : 'receitas';
-                const subCollection = movData.origemTipo === 'PAGAMENTO_DESPESA' ? 'pagamentos' : 'recebimentos';
+                const isPagamento = movData.origemTipo === 'PAGAMENTO_DESPESA';
+                const parentCollection = isPagamento ? 'despesas' : 'receitas';
+                const subCollection = isPagamento ? 'pagamentos' : 'recebimentos';
                 const origemParentDocRef = doc(db, `users/${userId}/${parentCollection}`, movData.origemParentId);
                 const origemDocRef = doc(origemParentDocRef, subCollection, movData.origemId);
                 const historicoCollectionRef = collection(origemParentDocRef, subCollection);
@@ -288,14 +319,19 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
 
                 const origemParentDoc = origemParentDocRaw.data();
                 const pagamentoOriginalData = origemDoc.data();
-                const valorPrincipalEstornado = pagamentoOriginalData.valorPrincipal || 0;
-                const jurosEstornados = pagamentoOriginalData.jurosPagos || pagamentoOriginalData.jurosRecebidos || 0;
-                const descontosEstornados = pagamentoOriginalData.descontosAplicados || pagamentoOriginalData.descontosConcedidos || 0;
+                const valorPrincipalEstornado = Number(pagamentoOriginalData.valorPrincipal ?? pagamentoOriginalData.valorBase ?? 0);
+                const jurosEstornados = Number(pagamentoOriginalData.jurosPagos ?? pagamentoOriginalData.jurosRecebidos ?? 0);
+                const descontosEstornados = Number(pagamentoOriginalData.descontosAplicados ?? pagamentoOriginalData.descontosConcedidos ?? 0);
+                const valorMovimentadoEstornado = Number(
+                    pagamentoOriginalData.valorMovimentado ??
+                    (valorPrincipalEstornado + jurosEstornados - descontosEstornados)
+                );
 
                 // 2. EXECUTA AS ALTERAÇÕES
 
                 // Deleta a movimentação bancária da tela de conciliação
                 transaction.delete(movRef);
+                if (financialLedgerRef) transaction.delete(financialLedgerRef);
 
                 // Marca o registro de pagamento/recebimento original como estornado, em vez de deletar
                 transaction.update(origemDocRef, { estornado: true });
@@ -306,8 +342,10 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
                     tipoTransacao: "Estorno",
                     dataTransacao: new Date().toISOString().split('T')[0],
                     valorPrincipal: valorPrincipalEstornado,
-                    jurosPagos: jurosEstornados,
-                    descontosAplicados: descontosEstornados,
+                    ...(isPagamento
+                        ? { jurosPagos: jurosEstornados, descontosAplicados: descontosEstornados }
+                        : { jurosRecebidos: jurosEstornados, descontosConcedidos: descontosEstornados }),
+                    valorMovimentado: valorMovimentadoEstornado,
                     usuarioResponsavel: currentUserName || "Sistema",
                     motivoEstorno: "Estornado via Conciliação Bancária",
                     createdAt: serverTimestamp()
@@ -317,20 +355,30 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
                 const updateData = {};
                 const today = new Date(); today.setHours(0, 0, 0, 0);
 
-                if (movData.origemTipo === 'PAGAMENTO_DESPESA') {
-                    updateData.totalPago = (origemParentDoc.totalPago || 0) - valorPrincipalEstornado;
-                    updateData.totalJuros = (origemParentDoc.totalJuros || 0) - jurosEstornados;
-                    updateData.totalDescontos = (origemParentDoc.totalDescontos || 0) - descontosEstornados;
-                    updateData.valorSaldo = (origemParentDoc.valorOriginal || 0) + (updateData.totalJuros || 0) - (updateData.totalPago || 0) - (updateData.totalDescontos || 0);
+                if (isPagamento) {
+                    updateData.totalPago = Math.max(0, Number(origemParentDoc.totalPago ?? origemParentDoc.valorPago ?? 0) - valorPrincipalEstornado);
+                    updateData.totalJuros = Math.max(0, Number(origemParentDoc.totalJuros ?? 0) - jurosEstornados);
+                    updateData.totalDescontos = Math.max(0, Number(origemParentDoc.totalDescontos ?? 0) - descontosEstornados);
+                    const valorOriginal = Number(origemParentDoc.valorOriginal ?? origemParentDoc.valor ?? 0);
+                    updateData.valorSaldo = valorOriginal + updateData.totalJuros - updateData.totalPago - updateData.totalDescontos;
                     const vencimento = new Date(origemParentDoc.vencimento + 'T00:00:00');
-                    updateData.status = updateData.totalPago <= 0 ? (vencimento < today ? 'Vencido' : 'Pendente') : 'Pago Parcialmente';
+                    updateData.status = updateData.valorSaldo <= 0
+                        ? 'Pago'
+                        : updateData.totalPago > 0
+                            ? 'Pago Parcialmente'
+                            : (vencimento < today ? 'Vencido' : 'Pendente');
                 } else { // RECEBIMENTO_RECEITA
-                    updateData.totalRecebido = (origemParentDoc.totalRecebido || 0) - valorPrincipalEstornado;
-                    updateData.totalJuros = (origemParentDoc.totalJuros || 0) - jurosEstornados;
-                    updateData.totalDescontos = (origemParentDoc.totalDescontos || 0) - descontosEstornados;
-                    updateData.saldoPendente = (origemParentDoc.valorOriginal || 0) + (updateData.totalJuros || 0) - (updateData.totalRecebido || 0) - (updateData.totalDescontos || 0);
+                    updateData.totalRecebido = Math.max(0, Number(origemParentDoc.totalRecebido ?? 0) - valorPrincipalEstornado);
+                    updateData.totalJuros = Math.max(0, Number(origemParentDoc.totalJuros ?? 0) - jurosEstornados);
+                    updateData.totalDescontos = Math.max(0, Number(origemParentDoc.totalDescontos ?? 0) - descontosEstornados);
+                    const valorOriginal = Number(origemParentDoc.valorOriginal ?? origemParentDoc.valor ?? 0);
+                    updateData.saldoPendente = valorOriginal + updateData.totalJuros - updateData.totalRecebido - updateData.totalDescontos;
                     const vencimento = new Date((origemParentDoc.dataVencimento || origemParentDoc.vencimento) + 'T00:00:00');
-                    updateData.status = updateData.totalRecebido <= 0 ? (vencimento < today ? 'Vencido' : 'Pendente') : 'Recebido Parcialmente';
+                    updateData.status = updateData.saldoPendente <= 0
+                        ? 'Recebido'
+                        : updateData.totalRecebido > 0
+                            ? 'Recebido Parcialmente'
+                            : (vencimento < today ? 'Vencido' : 'Pendente');
                 }
                 transaction.update(origemParentDocRef, updateData);
             });

@@ -270,13 +270,13 @@
         // Importações do Firebase SDK
         import {
             initializeApp
-        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
         import {
             getAuth,
             signInWithEmailAndPassword,
             onAuthStateChanged,
             signOut
-        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
         import {
             getFirestore,
             collection,
@@ -287,7 +287,12 @@
             addDoc,
             serverTimestamp,
             onSnapshot
-        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+        import {
+            getCompanyAccessProfile,
+            isCompanyAuthEmail,
+            signInCompanyUser
+        } from './auth-company.js';
 
         // Configuração do Firebase (a mesma do seu ERP)
         const firebaseConfig = {
@@ -389,29 +394,56 @@
 
 
         // --- Lógica de Autenticação ---
-        onAuthStateChanged(auth, (user) => {
-            if (user) { // Admin do Firebase logado
-                effectiveUserId = user.uid;
-                currentUserName = user.email;
-                initializeAppUI();
-            } else if (sessionStorage.getItem('companyUser')) { // Usuário comum (não-admin) logado
-                const sessionData = JSON.parse(sessionStorage.getItem('companyUser'));
-                effectiveUserId = sessionData.adminId;
-                currentUserName = sessionData.userName;
-                initializeAppUI();
-            } else { // Ninguém logado
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                effectiveUserId = null;
+                currentUserName = null;
                 showView('login-page');
                 mainApp.style.display = 'none';
                 detachAllListeners();
+                return;
+            }
+
+            try {
+                const companyProfile = await getCompanyAccessProfile(db, user.uid);
+                if (companyProfile) {
+                    if (companyProfile.active === false || !companyProfile.adminId) {
+                        await signOut(auth);
+                        return;
+                    }
+                    if (companyProfile.primeiroAcesso === true) {
+                        await signOut(auth);
+                        showFeedback(userLoginError, 'Conclua o primeiro acesso pela tela principal do ERP antes de abrir o CRM.', true);
+                        return;
+                    }
+                    effectiveUserId = companyProfile.adminId;
+                    currentUserName = companyProfile.nomeUsuario || companyProfile.login || user.email;
+                    initializeAppUI();
+                    return;
+                }
+
+                if (isCompanyAuthEmail(user.email)) {
+                    await signOut(auth);
+                    showFeedback(userLoginError, 'Este acesso não está vinculado a uma empresa ativa.', true);
+                    return;
+                }
+
+                effectiveUserId = user.uid;
+                currentUserName = user.email;
+                initializeAppUI();
+            } catch (error) {
+                console.error('Erro ao restaurar a sessão do CRM:', error);
+                await signOut(auth);
+                showFeedback(userLoginError, 'Não foi possível restaurar a sessão. Faça login novamente.', true);
             }
         });
 
-        // Login de usuário comum
+        // Login de usuário comum via Firebase Auth
         userLoginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             userLoginError.textContent = '';
             const empresaId = loginEmpresaSelect.value;
-            const nomeUsuario = document.getElementById('login-usuario').value;
+            const nomeUsuario = document.getElementById('login-usuario').value.trim();
             const senha = document.getElementById('login-password').value;
 
             if (!empresaId) {
@@ -420,36 +452,16 @@
             }
 
             try {
-                const q = query(
-                    collection(db, "acessos"),
-                    where("empresaId", "==", empresaId),
-                    where("login", "==", nomeUsuario),
-                    where("senha", "==", senha) // AVISO: Inseguro, mas mantendo a lógica do ERP
-                );
-                const querySnapshot = await getDocs(q);
-
-                if (querySnapshot.empty) {
-                    showFeedback(userLoginError, 'Empresa, usuário ou senha inválidos.', true);
-                    return;
-                }
-                
-                const userDoc = querySnapshot.docs[0].data();
-                
-                // TODO: Adicionar lógica de primeiro acesso se necessário
-                
-                const sessionData = {
-                    adminId: userDoc.adminId,
-                    userName: userDoc.nomeUsuario
-                };
-                sessionStorage.setItem('companyUser', JSON.stringify(sessionData));
-                
-                effectiveUserId = userDoc.adminId;
-                currentUserName = userDoc.nomeUsuario;
-                initializeAppUI();
-
+                await signInCompanyUser({ auth, db, empresaId, login: nomeUsuario, password: senha });
             } catch (error) {
-                console.error("Erro no login do usuário:", error);
-                showFeedback(userLoginError, 'Ocorreu um erro. Tente novamente.', true);
+                console.error('Erro no login do usuário da empresa:', error);
+                showFeedback(
+                    userLoginError,
+                    error?.code === 'company-auth/access-not-ready'
+                        ? 'Este acesso ainda precisa ser migrado. Entre uma vez como administrador desta empresa e tente novamente.'
+                        : 'Empresa, usuário ou senha inválidos.',
+                    true
+                );
             }
         });
         
@@ -476,12 +488,7 @@
 
         // Logout
         logoutButton.addEventListener('click', async () => {
-             if (sessionStorage.getItem('companyUser')) {
-                sessionStorage.removeItem('companyUser');
-                window.location.reload();
-            } else {
-                await signOut(auth);
-            }
+            await signOut(auth);
         });
 
         // --- Lógica da Aplicação Após Login ---
