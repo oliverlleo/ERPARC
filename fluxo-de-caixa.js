@@ -1,6 +1,7 @@
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp, runTransaction, updateDoc, collectionGroup } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 import { fetchFinancialLedger, fetchDocumentsByIds, financialMovementDocId } from './financial-ledger.js';
 import { escapeHtml } from './security-utils.js';
+import { allocateCents } from './financial-rules.js';
 
 // This function will be called from the main script when the user is authenticated.
 export function initializeFluxoDeCaixa(db, userId, common) {
@@ -169,11 +170,16 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             let unifiedTransactions = [];
 
             if (showRealizado) {
-                const [financialMovements, transferencias] = await Promise.all([
+                const [financialMovements, transferencias, transferMovements] = await Promise.all([
                     fetchFinancialLedger(db, userId, { startDate, endDate }),
-                    fetchCollection('transferencias', startDate, endDate)
+                    fetchCollection('transferencias', startDate, endDate),
+                    fetchCollection('movimentacoesBancarias', startDate, endDate)
                 ]);
-                const realizedTransactions = await enrichAndUnifyTransactions(financialMovements, transferencias);
+                const realizedTransactions = await enrichAndUnifyTransactions(
+                    financialMovements,
+                    transferencias,
+                    transferMovements
+                );
                 unifiedTransactions.push(...realizedTransactions);
             }
 
@@ -248,12 +254,17 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         }
 
         // 2. Get past transactions
-        const [financialMovements, transferencias] = await Promise.all([
+        const [financialMovements, transferencias, transferMovements] = await Promise.all([
             fetchFinancialLedger(db, userId, { endDate: startDate, inclusive: false }),
-            fetchCollection('transferencias', null, startDate, false)
+            fetchCollection('transferencias', null, startDate, false),
+            fetchCollection('movimentacoesBancarias', null, startDate, false)
         ]);
 
-        const allTransactions = await enrichAndUnifyTransactions(financialMovements, transferencias);
+        const allTransactions = await enrichAndUnifyTransactions(
+            financialMovements,
+            transferencias,
+            transferMovements
+        );
         const filteredTransactions = applyFilters(allTransactions, contaId, 'todas');
 
         // 3. Add effect of past transactions to the initial balance
@@ -284,7 +295,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         return snapshot.docs;
     }
 
-    async function enrichAndUnifyTransactions(financialMovements, transferencias) {
+    async function enrichAndUnifyTransactions(financialMovements, transferencias, transferMovements = []) {
         const unified = [];
         const pagamentos = financialMovements.filter(movement => movement.tipo === 'pagamento');
         const recebimentos = financialMovements.filter(movement => movement.tipo === 'recebimento');
@@ -347,22 +358,60 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             });
         }
 
+        const transferIds = new Set();
         for (const snapshotDoc of transferencias) {
             const data = snapshotDoc.data();
+            const transferId = data.transferenciaGrupoId || snapshotDoc.id;
+            transferIds.add(transferId);
             unified.push({
-                id: snapshotDoc.id,
+                id: transferId,
                 data: data.dataTransacao,
                 descricao: `Transferência de ${data.contaOrigemNome} para ${data.contaDestinoNome}`,
                 participante: 'Interno',
                 planoDeConta: 'Transferência',
                 dataVencimento: data.dataTransacao,
                 tipoAtividade: 'N/A',
-                valor: data.valor,
+                valor: Math.abs(data.valor || 0),
                 juros: 0,
                 desconto: 0,
                 contaOrigemId: data.contaOrigemId,
                 contaDestinoId: data.contaDestinoId,
                 conciliado: data.conciliado || false,
+                type: 'transferencia'
+            });
+        }
+
+        const transferGroups = new Map();
+        for (const snapshotDoc of transferMovements) {
+            const data = snapshotDoc.data();
+            if (data.estornado === true || !['TRANSFERENCIA_SAIDA', 'TRANSFERENCIA_ENTRADA'].includes(data.origemTipo)) {
+                continue;
+            }
+            const groupId = data.origemId;
+            if (!groupId || transferIds.has(groupId)) continue;
+            if (!transferGroups.has(groupId)) transferGroups.set(groupId, []);
+            transferGroups.get(groupId).push({ id: snapshotDoc.id, ...data });
+        }
+
+        for (const [groupId, legs] of transferGroups) {
+            const saida = legs.find(leg => leg.origemTipo === 'TRANSFERENCIA_SAIDA');
+            const entrada = legs.find(leg => leg.origemTipo === 'TRANSFERENCIA_ENTRADA');
+            if (!saida || !entrada) continue;
+
+            unified.push({
+                id: groupId,
+                data: saida.dataTransacao || entrada.dataTransacao,
+                descricao: saida.descricao || entrada.descricao || 'Transferência bancária',
+                participante: 'Interno',
+                planoDeConta: 'Transferência',
+                dataVencimento: saida.dataTransacao || entrada.dataTransacao,
+                tipoAtividade: 'N/A',
+                valor: Math.abs(saida.valor || entrada.valor || 0),
+                juros: 0,
+                desconto: 0,
+                contaOrigemId: saida.contaBancariaId,
+                contaDestinoId: entrada.contaBancariaId,
+                conciliado: Boolean(saida.conciliado && entrada.conciliado),
                 type: 'transferencia'
             });
         }
@@ -1375,47 +1424,8 @@ export function initializeFluxoDeCaixa(db, userId, common) {
     closeTransferenciaModalBtn.addEventListener('click', () => transferenciaModal.classList.add('hidden'));
     cancelTransferenciaModalBtn.addEventListener('click', () => transferenciaModal.classList.add('hidden'));
 
-    transferenciaForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const feedbackId = 'transferencia-form-feedback';
-        const contaOrigemId = document.getElementById('transferencia-conta-origem').value;
-        const contaDestinoId = document.getElementById('transferencia-conta-destino').value;
-        const valor = toCents(document.getElementById('transferencia-valor').value);
-        const data = document.getElementById('transferencia-data').value;
-
-        if(contaOrigemId === contaDestinoId) {
-            showFeedback(feedbackId, "A conta de origem e destino não podem ser a mesma.", true);
-            return;
-        }
-        if(!valor || !data || !contaOrigemId || !contaDestinoId) {
-             showFeedback(feedbackId, "Todos os campos são obrigatórios.", true);
-            return;
-        }
-
-        try {
-            const contaOrigemNome = allContasBancarias.find(c => c.id === contaOrigemId).nome;
-            const contaDestinoNome = allContasBancarias.find(c => c.id === contaDestinoId).nome;
-
-            await addDoc(collection(db, `users/${userId}/transferencias`), {
-                dataTransacao: data,
-                valor: valor,
-                contaOrigemId,
-                contaDestinoId,
-                contaOrigemNome,
-                contaDestinoNome,
-                observacao: document.getElementById('transferencia-obs').value,
-                adminId: userId,
-                createdAt: serverTimestamp()
-            });
-            showFeedback(feedbackId, "Transferência salva com sucesso!", false);
-            transferenciaForm.reset();
-            transferenciaModal.classList.add('hidden');
-            calculateAndRenderCashFlow();
-        } catch(error) {
-            console.error("Erro ao salvar transferência:", error);
-            showFeedback(feedbackId, "Erro ao salvar. Tente novamente.", true);
-        }
-    });
+    // O submit da transferência é tratado pelo handler transacional único em index.html.
+    // Este módulo mantém apenas os controles de abertura/fechamento do modal e a leitura do fluxo.
 
     // --- What-If Logic ---
     function handleWhatIfFormSubmit(event) {
@@ -1450,7 +1460,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             const numParcelas = parseInt(form.querySelector(`#what-if-${type}-installments`).value, 10);
             if (!numParcelas || numParcelas <= 0) { alert("Número de parcelas inválido."); return; }
 
-            const valorParcela = Math.round(valorTotal / numParcelas);
+            const valoresParcelas = allocateCents(valorTotal, numParcelas);
             for (let i = 0; i < numParcelas; i++) {
                 const dataParcela = new Date(dataInicio + 'T00:00:00');
                 dataParcela.setMonth(dataParcela.getMonth() + i);
@@ -1459,7 +1469,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                     type: type,
                     descricao: `${descricao} (Parcela ${i + 1}/${numParcelas})`,
                     data: dataParcela.toISOString().split('T')[0],
-                    valor: valorParcela,
+                    valor: valoresParcelas[i],
                     groupId: baseId
                 });
             }

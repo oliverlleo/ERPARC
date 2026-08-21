@@ -1,5 +1,6 @@
 import { getFirestore, collection, query, where, getDocs, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 import { escapeHtml } from './security-utils.js';
+import { classifyOverdueBucket } from './financial-rules.js';
 
 export function initializeRelatorios(db, userId, common) {
     if (!userId) return;
@@ -483,17 +484,16 @@ export function initializeRelatorios(db, userId, common) {
 
         dadosComAtraso.forEach(d => {
             const saldo = d.valorSaldo || 0;
-            if (d.diasAtraso <= 30) buckets['30'].total += saldo;
-            else if (d.diasAtraso <= 60) buckets['60'].total += saldo;
-            else if (d.diasAtraso <= 90) buckets['90'].total += saldo;
-            else buckets['91+'].total += saldo;
+            const bucket = classifyOverdueBucket(d.diasAtraso);
+            if (bucket) buckets[bucket].total += saldo;
         });
 
-        let html = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">';
+        let html = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">';
         const bucketData = [
             { label: 'Todos', key: 'todos', color: 'blue' },
             { label: 'Vencidos até 30 dias', key: '30', color: 'yellow' },
             { label: 'Vencidos de 31 a 60 dias', key: '60', color: 'orange' },
+            { label: 'Vencidos de 61 a 90 dias', key: '90', color: 'amber' },
             { label: 'Vencidos há mais de 90 dias', key: '91+', color: 'red' }
         ];
 
@@ -814,13 +814,10 @@ export function initializeRelatorios(db, userId, common) {
                     show = true;
                     break;
                 case '30':
-                    show = diasAtraso <= 30;
-                    break;
                 case '60':
-                    show = diasAtraso > 30 && diasAtraso <= 60;
-                    break;
+                case '90':
                 case '91+':
-                    show = diasAtraso > 60; // Adjusted logic to match the bucket label
+                    show = classifyOverdueBucket(diasAtraso) === bucket;
                     break;
             }
             row.style.display = show ? '' : 'none';
@@ -833,11 +830,47 @@ export function initializeRelatorios(db, userId, common) {
 
 
     // --- Exportação ---
+    function csvEscape(value) {
+        const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+        return `"${text.replace(/"/g, '""')}"`;
+    }
+
+    function exportarRelatorioComoCsv(container, filename) {
+        const tables = Array.from(container.querySelectorAll('table'));
+        if (tables.length === 0) {
+            const feedback = document.createElement('p');
+            feedback.className = 'text-center text-red-600 text-sm py-4';
+            feedback.textContent = 'Gere um relatório antes de exportar.';
+            container.appendChild(feedback);
+            window.setTimeout(() => feedback.remove(), 5000);
+            return;
+        }
+
+        const rows = [];
+        tables.forEach((table, tableIndex) => {
+            if (tableIndex > 0) rows.push([]);
+            table.querySelectorAll('tr').forEach(row => {
+                rows.push(Array.from(row.querySelectorAll('th, td')).map(cell => csvEscape(cell.textContent)));
+            });
+        });
+
+        const csv = '\uFEFF' + rows.map(row => row.join(';')).join('\r\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    }
+
     exportarRelatorioReceberBtn.addEventListener('click', () => {
-         alert('Funcionalidade de exportação em desenvolvimento.');
+        exportarRelatorioComoCsv(visualizacaoAreaReceber, 'relatorio-contas-a-receber.csv');
     });
-     exportarRelatorioPagarBtn.addEventListener('click', () => {
-         alert('Funcionalidade de exportação em desenvolvimento.');
+    exportarRelatorioPagarBtn.addEventListener('click', () => {
+        exportarRelatorioComoCsv(visualizacaoAreaPagar, 'relatorio-contas-a-pagar.csv');
     });
 
 
