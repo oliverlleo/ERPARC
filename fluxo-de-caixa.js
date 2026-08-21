@@ -1,7 +1,7 @@
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp, runTransaction, updateDoc, collectionGroup } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 import { fetchFinancialLedger, fetchDocumentsByIds, financialMovementDocId } from './financial-ledger.js';
 import { escapeHtml } from './security-utils.js';
-import { allocateCents } from './financial-rules.js';
+import { allocateCents, addMonthsClamped, parseMoneyToCents } from './financial-rules.js';
 
 // This function will be called from the main script when the user is authenticated.
 export function initializeFluxoDeCaixa(db, userId, common) {
@@ -57,7 +57,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
 
 
     // --- Utility Functions (from common) ---
-    const { formatCurrency, toCents, fromCents, showFeedback } = common;
+    const { formatCurrency, fromCents, showFeedback } = common;
 
     // --- Main Logic ---
     async function fetchProjectedTransactions(startDate, endDate) {
@@ -89,7 +89,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                     planoDeConta: categoria ? categoria.nome : 'N/A',
                     dataVencimento: despesaData.vencimento,
                     entrada: 0,
-                    saida: despesaData.valorSaldo || despesaData.valorOriginal,
+                    saida: despesaData.valorSaldo ?? despesaData.valorOriginal ?? 0,
                     juros: 0,
                     desconto: 0,
                     conciliado: false,
@@ -131,7 +131,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                     participante: receitaData.clienteNome || 'N/A',
                     planoDeConta: categoria ? categoria.nome : 'N/A',
                     dataVencimento: dataVencimento,
-                    entrada: receitaData.saldoPendente || receitaData.valorOriginal,
+                    entrada: receitaData.saldoPendente ?? receitaData.valorOriginal ?? 0,
                     saida: 0,
                     juros: 0,
                     desconto: 0,
@@ -314,6 +314,10 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             if (!despesaSnap || movement.estornado === true) continue;
             const despesaData = despesaSnap.data();
             const categoria = planoContasMap.get(despesaData.categoriaId);
+            const valorPrincipal = Number(movement.valorPrincipal ?? 0);
+            const juros = Number(movement.juros ?? 0);
+            const desconto = Number(movement.desconto ?? 0);
+            const valorMovimentado = Number(movement.valorMovimentado ?? valorPrincipal);
             unified.push({
                 id: movement.origemId || movement.id,
                 parentId: movement.origemParentId,
@@ -324,9 +328,10 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 dataVencimento: despesaData.vencimento,
                 tipoAtividade: categoria ? categoria.tipoDeAtividade : 'Operacional',
                 entrada: 0,
-                saida: movement.valorPrincipal || 0,
-                juros: movement.juros || 0,
-                desconto: movement.desconto || 0,
+                saida: valorMovimentado,
+                valorPrincipal,
+                juros,
+                desconto,
                 contaId: movement.contaBancariaId,
                 conciliado: movement.conciliado || false,
                 type: 'pagamento'
@@ -339,6 +344,10 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             const receitaData = receitaSnap.data();
             if ((receitaData.status || 'Pendente') === 'Desdobrado') continue;
             const categoria = planoContasMap.get(receitaData.categoriaId);
+            const valorPrincipal = Number(movement.valorPrincipal ?? 0);
+            const juros = Number(movement.juros ?? 0);
+            const desconto = Number(movement.desconto ?? 0);
+            const valorMovimentado = Number(movement.valorMovimentado ?? valorPrincipal);
             unified.push({
                 id: movement.origemId || movement.id,
                 parentId: movement.origemParentId,
@@ -348,10 +357,11 @@ export function initializeFluxoDeCaixa(db, userId, common) {
                 planoDeConta: categoria ? categoria.nome : 'N/A',
                 dataVencimento: receitaData.dataVencimento || receitaData.vencimento,
                 tipoAtividade: categoria ? categoria.tipoDeAtividade : 'Operacional',
-                entrada: movement.valorPrincipal || 0,
+                entrada: valorMovimentado,
                 saida: 0,
-                juros: movement.juros || 0,
-                desconto: movement.desconto || 0,
+                valorPrincipal,
+                juros,
+                desconto,
                 contaId: movement.contaBancariaId,
                 conciliado: movement.conciliado || false,
                 type: 'recebimento'
@@ -1434,13 +1444,14 @@ export function initializeFluxoDeCaixa(db, userId, common) {
         const isReceita = form.id.includes('receita');
         const type = isReceita ? 'receita' : 'despesa';
 
-        const descricao = form.querySelector(`#what-if-${type}-descricao`).value;
-        const valorTotal = toCents(form.querySelector(`#what-if-${type}-valor`).value);
+        const descricao = form.querySelector(`#what-if-${type}-descricao`).value.trim();
+        const valorInput = form.querySelector(`#what-if-${type}-valor`).value;
+        const valorTotal = parseMoneyToCents(valorInput);
         const dataInicio = form.querySelector(`#what-if-${type}-data`).value;
         const formaPagamento = form.querySelector(`#what-if-${type}-forma-pagamento`).value;
 
-        if (!descricao || !valorTotal || !dataInicio) {
-            alert("Por favor, preencha Descrição, Valor e Data de Início.");
+        if (!descricao || valorTotal === null || valorTotal <= 0 || !dataInicio) {
+            alert("Preencha uma descrição, um valor monetário maior que zero e a data de início.");
             return;
         }
 
@@ -1462,8 +1473,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
 
             const valoresParcelas = allocateCents(valorTotal, numParcelas);
             for (let i = 0; i < numParcelas; i++) {
-                const dataParcela = new Date(dataInicio + 'T00:00:00');
-                dataParcela.setMonth(dataParcela.getMonth() + i);
+                const dataParcela = addMonthsClamped(new Date(dataInicio + 'T00:00:00'), i);
                 transactionsToAdd.push({
                     id: `${baseId}-${i}`,
                     type: type,
@@ -1481,8 +1491,7 @@ export function initializeFluxoDeCaixa(db, userId, common) {
             const multiplier = getRecurrenceMultiplier(frequencia);
 
             for (let i = 0; i < numRecorrencias; i++) {
-                const dataRecorrencia = new Date(dataInicio + 'T00:00:00');
-                dataRecorrencia.setMonth(dataRecorrencia.getMonth() + (i * multiplier));
+                const dataRecorrencia = addMonthsClamped(new Date(dataInicio + 'T00:00:00'), i * multiplier);
                 transactionsToAdd.push({
                     id: `${baseId}-${i}`,
                     type: type,

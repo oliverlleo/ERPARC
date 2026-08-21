@@ -45,17 +45,30 @@ async function mapWithConcurrency(items, concurrency, worker) {
     return results;
 }
 
+function getLegacyCashValue(data, bankMovement) {
+    if (data.valorMovimentado !== undefined && data.valorMovimentado !== null) {
+        return Number(data.valorMovimentado);
+    }
+    if (bankMovement?.valor !== undefined && bankMovement?.valor !== null) {
+        return Math.abs(Number(bankMovement.valor));
+    }
+    return Number(data.valorPrincipal ?? 0);
+}
+
 function normalizeLegacyPayment(parentDoc, transactionDoc, bankMovement) {
     const data = transactionDoc.data();
+    const juros = Number(data.jurosPagos || 0);
+    const desconto = Number(data.descontosAplicados || 0);
     return {
         tipo: 'pagamento',
         origemTipo: 'PAGAMENTO_DESPESA',
         origemParentId: parentDoc.id,
         origemId: transactionDoc.id,
         dataTransacao: data.dataTransacao || null,
-        valorPrincipal: data.valorPrincipal || 0,
-        juros: data.jurosPagos || 0,
-        desconto: data.descontosAplicados || 0,
+        valorPrincipal: Number(data.valorPrincipal || 0),
+        juros,
+        desconto,
+        valorMovimentado: getLegacyCashValue(data, bankMovement),
         contaBancariaId: data.contaSaidaId || bankMovement?.contaBancariaId || null,
         conciliado: bankMovement?.conciliado ?? data.conciliado ?? false,
         dataConciliacao: bankMovement?.dataConciliacao || null,
@@ -68,15 +81,18 @@ function normalizeLegacyPayment(parentDoc, transactionDoc, bankMovement) {
 
 function normalizeLegacyReceipt(parentDoc, transactionDoc, bankMovement) {
     const data = transactionDoc.data();
+    const juros = Number(data.jurosRecebidos || 0);
+    const desconto = Number(data.descontosConcedidos || 0);
     return {
         tipo: 'recebimento',
         origemTipo: 'RECEBIMENTO_RECEITA',
         origemParentId: parentDoc.id,
         origemId: transactionDoc.id,
         dataTransacao: data.dataTransacao || null,
-        valorPrincipal: data.valorPrincipal || 0,
-        juros: data.jurosRecebidos || 0,
-        desconto: data.descontosConcedidos || 0,
+        valorPrincipal: Number(data.valorPrincipal || 0),
+        juros,
+        desconto,
+        valorMovimentado: getLegacyCashValue(data, bankMovement),
         contaBancariaId: data.contaEntradaId || bankMovement?.contaBancariaId || null,
         conciliado: bankMovement?.conciliado ?? data.conciliado ?? false,
         dataConciliacao: bankMovement?.dataConciliacao || null,

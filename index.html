@@ -5,6 +5,7 @@
   <meta charset="utf-8" />
   <meta content="width=device-width, initial-scale=1.0" name="viewport" />
   <title>ArchSys - ERP</title>
+  <link href="./favicon.svg" rel="icon" type="image/svg+xml" />
   <link href="https://fonts.googleapis.com" rel="preconnect" />
   <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -3579,7 +3580,7 @@
     import { ensureFinancialLedger, fetchFinancialLedger, financialMovementDocId } from './financial-ledger.js';
     import { createCompanyAccess, updateCompanyAccessLogin, disableCompanyAccess, migrateLegacyCompanyAccesses, signInCompanyUser, getCompanyAccessProfile, completeCompanyFirstAccess, generateSecureRandomPassword, generateSecureCompanyCode, isCompanyAuthEmail } from './auth-company.js';
     import { escapeHtml } from './security-utils.js';
-    import { allocateCents } from './financial-rules.js';
+    import { allocateCents, allocateProportionally, parseMoneyToCents, addMonthsClamped } from './financial-rules.js';
 
     // Configuração do Firebase
     const firebaseConfig = {
@@ -4075,16 +4076,51 @@
     }
 
     function toCents(value) {
-        if (typeof value === 'number') {
-            return Math.round(value * 100);
-        }
-        if (typeof value !== 'string') {
+        return parseMoneyToCents(value) ?? 0;
+    }
+
+    function readMoneyInput(input, label, { required = false, allowZero = true } = {}) {
+        const raw = input?.value?.trim() || '';
+        if (!raw) {
+            if (required) throw new Error(`${label} é obrigatório.`);
             return 0;
         }
-        // Remove R$, spaces, and thousand separators '.', then replace comma ',' with a dot '.'
-        const cleanValue = value.replace(/R\$\s?/, '').replace(/\./g, '').replace(',', '.');
-        const number = parseFloat(cleanValue);
-        return isNaN(number) ? 0 : Math.round(number * 100);
+
+        const cents = parseMoneyToCents(raw);
+        if (cents === null) throw new Error(`${label} inválido. Use, por exemplo, 1.234,56.`);
+        if (cents < 0) throw new Error(`${label} não pode ser negativo.`);
+        if (!allowZero && cents === 0) throw new Error(`${label} deve ser maior que zero.`);
+        return cents;
+    }
+
+    function getSelectedIdsFromField(fieldId) {
+        return [...new Set((document.getElementById(fieldId)?.value || '')
+            .split(',')
+            .map(id => id.trim())
+            .filter(Boolean))];
+    }
+
+    function calculateOpenBalance(data, kind) {
+        const original = Number(data.valorOriginal ?? data.valor ?? 0);
+        const principal = Number(data[kind === 'despesa' ? 'totalPago' : 'totalRecebido'] ?? (kind === 'despesa' ? data.valorPago : 0) ?? 0);
+        const juros = Number(data.totalJuros ?? 0);
+        const descontos = Number(data.totalDescontos ?? 0);
+        const storedBalance = data[kind === 'despesa' ? 'valorSaldo' : 'saldoPendente'];
+        const numericStoredBalance = Number(storedBalance);
+        return storedBalance !== undefined && storedBalance !== null && Number.isFinite(numericStoredBalance)
+            ? numericStoredBalance
+            : original + juros - principal - descontos;
+    }
+
+    function deriveTitleStatus(balance, principalTotal, dueDateValue, settledLabel, partialLabel) {
+        const numericBalance = Number(balance);
+        const numericPrincipalTotal = Number(principalTotal);
+        if (numericBalance <= 0) return settledLabel;
+        if (numericPrincipalTotal > 0) return partialLabel;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const dueDate = dueDateValue ? new Date(`${dueDateValue}T00:00:00`) : null;
+        return dueDate && dueDate < today ? 'Vencido' : 'Pendente';
     }
 
     function fromCents(cents) {
@@ -5035,7 +5071,7 @@
             const data = doc.data();
             const vencimento = new Date(data.vencimento + 'T00:00:00');
             const status = data.status || (data.pago ? 'Pago' : 'Pendente');
-            const valorSaldo = data.valorSaldo ?? ((data.valorOriginal || data.valor) - (data.totalPago || 0));
+            const valorSaldo = calculateOpenBalance(data, 'despesa');
 
 
             // Total a Pagar no Mês (based on remaining balance)
@@ -5101,7 +5137,7 @@
             allDespesas.forEach(snapshotDoc => {
                 const data = snapshotDoc.data();
                 const status = data.status || 'Pendente';
-                const saldo = data.valorSaldo ?? 0;
+                const saldo = calculateOpenBalance(data, 'despesa');
                 const vencimentoStr = data.vencimento;
                 if (!vencimentoStr) return;
 
@@ -5120,7 +5156,7 @@
                 const status = data.status || 'Pendente';
                 if (status === 'Desdobrado') return;
 
-                const saldo = data.saldoPendente ?? 0;
+                const saldo = calculateOpenBalance(data, 'receita');
                 const vencimentoStr = data.dataVencimento || data.vencimento;
                 if (!vencimentoStr) return;
 
@@ -5138,13 +5174,16 @@
                 if (!movement.dataTransacao || movement.estornado === true) return;
                 const transacaoDate = new Date(movement.dataTransacao + 'T00:00:00');
                 if (isNaN(transacaoDate.getTime())) return;
-                const valorPrincipal = movement.valorPrincipal || 0;
+                const valorPrincipal = Number(movement.valorPrincipal ?? 0);
+                const juros = Number(movement.juros ?? 0);
+                const desconto = Number(movement.desconto ?? 0);
+                const valorMovimentado = Number(movement.valorMovimentado ?? valorPrincipal);
 
                 if (movement.tipo === 'pagamento') {
                     if (!despesasById.has(movement.origemParentId)) return;
-                    movSaidas += valorPrincipal;
+                    movSaidas += valorMovimentado;
                     if (transacaoDate.getMonth() === currentMonth && transacaoDate.getFullYear() === currentYear) {
-                        pagarPagoMes += valorPrincipal;
+                        pagarPagoMes += valorMovimentado;
                     }
                     return;
                 }
@@ -5152,9 +5191,9 @@
                 if (movement.tipo === 'recebimento') {
                     const receita = receitasById.get(movement.origemParentId);
                     if (!receita || (receita.status || 'Pendente') === 'Desdobrado') return;
-                    movEntradas += valorPrincipal;
+                    movEntradas += valorMovimentado;
                     if (transacaoDate.getMonth() === currentMonth && transacaoDate.getFullYear() === currentYear) {
-                        receberRecebidoMes += valorPrincipal;
+                        receberRecebidoMes += valorMovimentado;
                     }
                 }
             });
@@ -6390,9 +6429,15 @@
         }
 
         const contaId = document.getElementById('conta-bancaria-id').value;
+        const saldoInicialRaw = document.getElementById('conta-bancaria-saldo-inicial').value.trim();
+        const saldoInicial = saldoInicialRaw ? parseMoneyToCents(saldoInicialRaw) : 0;
+        if (saldoInicial === null) {
+            showFeedback(feedbackId, "Saldo inicial inválido. Use, por exemplo, 1.234,56.", true);
+            return;
+        }
         const data = {
             nome: document.getElementById('conta-bancaria-nome').value,
-            saldoInicial: toCents(document.getElementById('conta-bancaria-saldo-inicial').value) || 0
+            saldoInicial
         };
 
         try {
@@ -6685,11 +6730,13 @@
             const tr = despesasTableBody.insertRow();
             tr.setAttribute('data-id', doc.id);
 
-            let statusText = data.status || 'Pendente';
             const vencimento = new Date(data.vencimento + 'T00:00:00');
-            if (statusText === 'Pendente' && vencimento < today) {
-                statusText = 'Vencido';
-            }
+            const valorOriginal = Number(data.valorOriginal ?? data.valor ?? 0);
+            const totalPago = Number(data.totalPago ?? data.valorPago ?? 0);
+            const totalDescontos = Number(data.totalDescontos ?? 0);
+            const totalJuros = Number(data.totalJuros ?? 0);
+            const valorSaldo = calculateOpenBalance(data, 'despesa');
+            const statusText = deriveTitleStatus(valorSaldo, totalPago, data.vencimento, 'Pago', 'Pago Parcialmente');
 
             const statusClasses = {
                 'Pago': 'bg-green-100 text-green-800',
@@ -6698,12 +6745,6 @@
                 'Vencido': 'bg-red-100 text-red-800',
             };
             const statusClass = statusClasses[statusText] || 'bg-gray-100 text-gray-800';
-
-            const valorOriginal = data.valorOriginal || data.valor || 0;
-            const totalPago = data.totalPago || data.valorPago || 0;
-            const totalDescontos = data.totalDescontos || 0;
-            const totalJuros = data.totalJuros || 0;
-            const valorSaldo = data.valorSaldo ?? (valorOriginal + totalJuros - totalPago - totalDescontos);
             const formaPagamentoText = (data.formaPagamento || 'N/A').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 
 
@@ -6969,9 +7010,7 @@
             docs.forEach(docSnap => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    const valorOriginal = data.valorOriginal || data.valor || 0;
-                    const totalPago = data.totalPago || 0;
-                    totalSaldoDevedor += (data.valorSaldo ?? (valorOriginal - totalPago));
+                    totalSaldoDevedor += calculateOpenBalance(data, 'despesa');
                 }
             });
 
@@ -7269,7 +7308,13 @@
             }
 
             const type = document.getElementById('mov-manual-entry-type').value;
-            let valor = toCents(document.getElementById('mov-manual-entry-valor').value);
+            let valor;
+            try {
+                valor = readMoneyInput(document.getElementById('mov-manual-entry-valor'), 'Valor', { required: true, allowZero: false });
+            } catch (error) {
+                showFeedback(feedbackId, error.message, true);
+                return;
+            }
             if (type === 'saida') {
                 valor = -Math.abs(valor);
             }
@@ -7361,11 +7406,11 @@
             document.getElementById('view-despesa-obs').textContent = data.obs || 'Nenhuma';
             document.getElementById('view-despesa-numero-documento').textContent = data.numeroDocumento || 'N/A';
 
-            const valorOriginal = data.valorOriginal || 0;
-            const totalPago = data.totalPago || 0;
-            const totalDescontos = data.totalDescontos || 0;
-            const totalJuros = data.totalJuros || 0;
-            const valorSaldo = data.valorSaldo ?? (valorOriginal + totalJuros - totalPago - totalDescontos);
+            const valorOriginal = Number(data.valorOriginal ?? data.valor ?? 0);
+            const totalPago = Number(data.totalPago ?? data.valorPago ?? 0);
+            const totalDescontos = Number(data.totalDescontos ?? 0);
+            const totalJuros = Number(data.totalJuros ?? 0);
+            const valorSaldo = calculateOpenBalance(data, 'despesa');
 
             document.getElementById('view-despesa-valor-original').textContent = formatCurrency(valorOriginal);
             document.getElementById('view-despesa-descontos').textContent = formatCurrency(totalDescontos);
@@ -7374,7 +7419,13 @@
             document.getElementById('view-despesa-saldo-devedor').textContent = formatCurrency(valorSaldo);
 
             const statusEl = document.getElementById('view-despesa-status');
-            statusEl.textContent = data.status || 'Pendente';
+            statusEl.textContent = deriveTitleStatus(
+                valorSaldo,
+                totalPago,
+                data.vencimento,
+                'Pago',
+                'Pago Parcialmente'
+            );
             const statusClasses = {
                 'Pago': 'bg-green-100 text-green-800', 'Pago Parcialmente': 'bg-yellow-100 text-yellow-800',
                 'Pendente': 'bg-blue-100 text-blue-800', 'Vencido': 'bg-red-100 text-red-800',
@@ -7519,28 +7570,30 @@
 
                 const despesaData = despesaDoc.data();
                 const pagamentoData = pagamentoDoc.data();
-                const valorPrincipalEstornado = pagamentoData.valorPrincipal || 0;
+                const valorPrincipalEstornado = Number(pagamentoData.valorPrincipal || 0);
+                const jurosEstornados = Number(pagamentoData.jurosPagos || 0);
+                const descontosEstornados = Number(pagamentoData.descontosAplicados || 0);
 
-                const novoTotalPago = despesaData.totalPago - valorPrincipalEstornado;
-                const novoSaldo = despesaData.valorSaldo + valorPrincipalEstornado;
-
-                let novoStatus;
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const vencimento = new Date(despesaData.vencimento + 'T00:00:00');
-
-                if (novoSaldo >= despesaData.valorOriginal) {
-                    novoStatus = vencimento < today ? 'Vencido' : 'Pendente';
-                } else if (novoSaldo > 0) {
-                    novoStatus = 'Pago Parcialmente';
-                } else {
-                    novoStatus = 'Pago';
-                }
+                const novoTotalPago = Math.max(0, Number(despesaData.totalPago ?? 0) - valorPrincipalEstornado);
+                const novoTotalJuros = Math.max(0, Number(despesaData.totalJuros ?? 0) - jurosEstornados);
+                const novoTotalDescontos = Math.max(0, Number(despesaData.totalDescontos ?? 0) - descontosEstornados);
+                const valorOriginal = Number(despesaData.valorOriginal ?? despesaData.valor ?? 0);
+                const novoSaldo = valorOriginal + novoTotalJuros - novoTotalPago - novoTotalDescontos;
+                const novoStatus = deriveTitleStatus(
+                    novoSaldo,
+                    novoTotalPago,
+                    despesaData.vencimento,
+                    'Pago',
+                    'Pago Parcialmente'
+                );
 
                 transaction.set(novoEstornoRef, {
                     tipoTransacao: "Estorno",
                     dataTransacao: new Date().toISOString().split('T')[0],
                     valorPrincipal: valorPrincipalEstornado,
+                    jurosPagos: jurosEstornados,
+                    descontosAplicados: descontosEstornados,
+                    valorMovimentado: valorPrincipalEstornado + jurosEstornados - descontosEstornados,
                     usuarioResponsavel: currentUserName || "N/A",
                     motivoEstorno: motivo,
                     pagamentoOriginalId: pagamentoId,
@@ -7552,6 +7605,8 @@
 
                 transaction.update(despesaRef, {
                     totalPago: novoTotalPago,
+                    totalJuros: novoTotalJuros,
+                    totalDescontos: novoTotalDescontos,
                     valorSaldo: novoSaldo,
                     status: novoStatus
                 });
@@ -7590,31 +7645,36 @@
             const userId = effectiveUserId;
             if (!userId) return;
 
-            const despesaId = document.getElementById('pagar-despesa-id').value.split(',')[0]; // Handle single payment for now
-            if (!despesaId) return;
+            const despesaIds = getSelectedIdsFromField('pagar-despesa-id');
+            if (despesaIds.length === 0) return;
 
-            const valorFinalPagoCents = toCents(document.getElementById('pagar-valor-final').value);
-            const descontosCents = toCents(document.getElementById('pagar-descontos').value);
+            let valorBaseCents;
+            let descontosCents;
+            try {
+                valorBaseCents = readMoneyInput(document.getElementById('pagar-valor'), 'Valor a pagar', { required: true, allowZero: false });
+                descontosCents = readMoneyInput(document.getElementById('pagar-descontos'), 'Descontos', { allowZero: true });
+            } catch (error) {
+                alert(error.message);
+                return;
+            }
 
             try {
-                const despesaRef = doc(db, 'users', userId, 'despesas', despesaId);
-                const despesaSnap = await getDoc(despesaRef);
-                if (!despesaSnap.exists()) return;
+                const despesaRefs = despesaIds.map(id => doc(db, 'users', userId, 'despesas', id));
+                const snapshots = await Promise.all(despesaRefs.map(despesaRef => getDoc(despesaRef)));
+                if (snapshots.some(snapshot => !snapshot.exists())) {
+                    throw new Error('Uma das despesas selecionadas não foi encontrada.');
+                }
+                const saldoDevedorTotal = snapshots.reduce((total, snapshot) => total + calculateOpenBalance(snapshot.data(), 'despesa'), 0);
 
-                const data = despesaSnap.data();
-                const valorOriginal = data.valorOriginal || 0;
-                const totalPago = data.totalPago || 0;
-                const saldoDevedorAtualCents = data.valorSaldo ?? (valorOriginal - totalPago);
-
-                // The total amount being settled is the cash paid + discounts.
-                // Compare this to the balance to see if it's a partial payment.
-                if ((valorFinalPagoCents + descontosCents) < saldoDevedorAtualCents) {
+                // Juros e principal anulam-se no saldo; desconto reduz o saldo e o valor-base é o que liquida o título.
+                if (valorBaseCents + descontosCents < saldoDevedorTotal) {
                     abrirModalConfirmacaoParcial();
                 } else {
                     prosseguirComPagamento();
                 }
             } catch (error) {
-                console.error("Erro ao verificar saldo da despesa:", error);
+                console.error("Erro ao verificar saldo das despesas:", error);
+                alert("Erro ao verificar saldo: " + error.message);
             }
         });
     }
@@ -7632,128 +7692,163 @@
             return;
         }
 
-        const despesaId = document.getElementById('pagar-despesa-id').value.split(',')[0];
-        if (!despesaId) {
-            alert("Erro: ID da despesa não encontrado.");
+        const despesaIds = getSelectedIdsFromField('pagar-despesa-id');
+        if (despesaIds.length === 0) {
+            alert("Erro: nenhuma despesa selecionada.");
+            return;
+        }
+        if (despesaIds.length > 100) {
+            alert("Selecione no máximo 100 despesas por operação.");
             return;
         }
 
-        // Gather data from forms
-        const valorPrincipalCents = toCents(document.getElementById('pagar-valor-final').value);
-        const descontosCents = toCents(document.getElementById('pagar-descontos').value);
-        const jurosCents = toCents(document.getElementById('pagar-juros-multa').value);
-        const dataTransacao = document.getElementById('pagar-data').value;
-        const contaSaidaId = document.getElementById('pagar-conta-saida').value;
-        const novaDataVencimento = document.getElementById('parcial-nova-data-vencimento').value;
+        let valorBaseCents;
+        let descontosCents;
+        let jurosCents;
+        try {
+            valorBaseCents = readMoneyInput(document.getElementById('pagar-valor'), 'Valor a pagar', { required: true, allowZero: false });
+            descontosCents = readMoneyInput(document.getElementById('pagar-descontos'), 'Descontos', { allowZero: true });
+            jurosCents = readMoneyInput(document.getElementById('pagar-juros-multa'), 'Juros/multa', { allowZero: true });
+        } catch (error) {
+            alert(error.message);
+            return;
+        }
 
-        const despesaRef = doc(db, 'users', userId, 'despesas', despesaId);
-        const pagamentosRef = collection(despesaRef, 'pagamentos');
-        const novoPagamentoRef = doc(pagamentosRef);
+        const valorMovimentadoCents = valorBaseCents + jurosCents - descontosCents;
+        if (valorMovimentadoCents < 0) {
+            alert("O desconto não pode ser maior que o valor a pagar acrescido dos juros.");
+            return;
+        }
+
+        const dataTransacao = document.getElementById('pagar-data').value;
+        const contaSaidaSelect = document.getElementById('pagar-conta-saida');
+        const contaSaidaId = contaSaidaSelect.value;
+        const contaSaidaNome = contaSaidaSelect.options[contaSaidaSelect.selectedIndex]?.text || '';
+        const novaDataVencimento = document.getElementById('parcial-nova-data-vencimento').value;
+        if (!dataTransacao || !contaSaidaId) {
+            alert("Informe a data e a conta de saída.");
+            return;
+        }
+
+        const despesaRefs = despesaIds.map(id => doc(db, 'users', userId, 'despesas', id));
+        const pagamentoRefs = despesaIds.map(id => doc(collection(doc(db, 'users', userId, 'despesas', id), 'pagamentos')));
 
         try {
             await runTransaction(db, async (transaction) => {
-                const despesaDoc = await transaction.get(despesaRef);
-                if (!despesaDoc.exists()) {
-                    throw "Despesa não encontrada.";
-                }
-
-                const data = despesaDoc.data();
-                const saldoAtual = data.valorSaldo;
-
-                const novoTotalPago = (data.totalPago || 0) + valorPrincipalCents;
-                const novoTotalDescontos = (data.totalDescontos || 0) + descontosCents;
-                const novoTotalJuros = (data.totalJuros || 0) + jurosCents;
-                // Recalculate saldo from scratch to ensure accuracy
-                const novoSaldo = (data.valorOriginal + novoTotalJuros) - novoTotalPago - novoTotalDescontos;
-
-                let novoStatus = 'Pendente';
-                if (novoSaldo <= 0) {
-                    novoStatus = 'Pago';
-                } else if (novoTotalPago > 0) {
-                    novoStatus = 'Pago Parcialmente';
-                }
-
-                // 1. Create the new payment document
-                transaction.set(novoPagamentoRef, {
-                    tipoTransacao: "Pagamento",
-                    dataTransacao: dataTransacao,
-                    valorPrincipal: valorPrincipalCents,
-                    jurosPagos: jurosCents,
-                    descontosAplicados: descontosCents,
-                    contaSaidaId: contaSaidaId,
-                    usuarioResponsavel: currentUserName || "N/A",
-                    createdAt: serverTimestamp()
+                const snapshots = await Promise.all(despesaRefs.map(ref => transaction.get(ref)));
+                const despesas = snapshots.map((snapshot, index) => {
+                    if (!snapshot.exists()) throw new Error(`Despesa não encontrada: ${despesaIds[index]}`);
+                    return snapshot.data();
                 });
-
-                const pagamentoLedgerRef = doc(
-                    db,
-                    'users',
-                    userId,
-                    'movimentacoesFinanceiras',
-                    financialMovementDocId('pagamento', despesaId, novoPagamentoRef.id)
-                );
-                transaction.set(pagamentoLedgerRef, {
-                    tipo: 'pagamento',
-                    origemTipo: 'PAGAMENTO_DESPESA',
-                    origemParentId: despesaId,
-                    origemId: novoPagamentoRef.id,
-                    dataTransacao,
-                    valorPrincipal: valorPrincipalCents,
-                    juros: jurosCents,
-                    desconto: descontosCents,
-                    contaBancariaId: contaSaidaId,
-                    conciliado: false,
-                    dataConciliacao: null,
-                    usuarioConciliacao: null,
-                    estornado: false,
-                    migratedFromLegacy: false,
-                    createdAt: serverTimestamp()
-                });
-
-                // 2. Update the main expense document
-                const updateData = {
-                    totalPago: novoTotalPago,
-                    valorSaldo: novoSaldo,
-                    totalDescontos: novoTotalDescontos,
-                    totalJuros: novoTotalJuros,
-                    status: novoStatus,
-                };
-
-                if (novaDataVencimento) {
-                    updateData.vencimento = novaDataVencimento;
+                const saldos = despesas.map(data => calculateOpenBalance(data, 'despesa'));
+                if (saldos.some(saldo => !Number.isInteger(saldo) || saldo <= 0)) {
+                    throw new Error('Uma das despesas selecionadas não possui saldo positivo em aberto.');
                 }
 
-                transaction.update(despesaRef, updateData);
+                const saldoTotal = saldos.reduce((sum, saldo) => sum + saldo, 0);
+                if (valorBaseCents > saldoTotal) {
+                    throw new Error(`O valor a pagar (${formatCurrency(valorBaseCents)}) excede o saldo selecionado (${formatCurrency(saldoTotal)}).`);
+                }
 
-                // 3. Create the bank transaction movement
-                const movRef = doc(collection(db, 'users', userId, 'movimentacoesBancarias'));
-                transaction.set(movRef, {
-                    contaBancariaId: contaSaidaId,
-                    contaBancariaNome: document.getElementById('pagar-conta-saida').options[document.getElementById('pagar-conta-saida').selectedIndex].text,
-                    dataTransacao: dataTransacao,
-                    valor: -Math.abs(valorPrincipalCents), // Negative value for an expense
-                    descricao: `Pagamento: ${data.descricao}`,
-                    origemTipo: 'PAGAMENTO_DESPESA',
-                    origemId: novoPagamentoRef.id, // Link to the payment document in the subcollection
-                    origemParentId: despesaId,
-                    origemDescricao: `Pagamento Despesa #${data.numeroDocumento || despesaId.substring(0,4)}`,
-                    conciliado: false,
-                    dataConciliacao: null,
-                    usuarioConciliacao: null,
-                    estornado: false,
-                    estornoDeId: null,
-                    createdAt: serverTimestamp(),
-                    adminId: userId
+                const bases = allocateProportionally(valorBaseCents, saldos);
+                const juros = allocateProportionally(jurosCents, bases);
+                const descontos = allocateProportionally(descontosCents, bases);
+
+                despesas.forEach((data, index) => {
+                    const base = bases[index];
+                    if (base === 0) return;
+
+                    const jurosItem = juros[index];
+                    const descontoItem = descontos[index];
+                    const valorMovimentado = base + jurosItem - descontoItem;
+                    const totalPago = Number(data.totalPago ?? data.valorPago ?? 0) + base;
+                    const totalJuros = Number(data.totalJuros ?? 0) + jurosItem;
+                    const totalDescontos = Number(data.totalDescontos ?? 0) + descontoItem;
+                    const valorOriginal = Number(data.valorOriginal ?? data.valor ?? 0);
+                    const novoSaldo = valorOriginal + totalJuros - totalPago - totalDescontos;
+                    const novoStatus = deriveTitleStatus(novoSaldo, totalPago, novaDataVencimento || data.vencimento, 'Pago', 'Pago Parcialmente');
+                    const pagamentoRef = pagamentoRefs[index];
+
+                    transaction.set(pagamentoRef, {
+                        tipoTransacao: "Pagamento",
+                        dataTransacao,
+                        valorPrincipal: base,
+                        valorBase: base,
+                        jurosPagos: jurosItem,
+                        descontosAplicados: descontoItem,
+                        valorMovimentado,
+                        contaSaidaId: contaSaidaId,
+                        usuarioResponsavel: currentUserName || "N/A",
+                        createdAt: serverTimestamp()
+                    });
+
+                    const pagamentoLedgerRef = doc(
+                        db,
+                        'users',
+                        userId,
+                        'movimentacoesFinanceiras',
+                        financialMovementDocId('pagamento', despesaIds[index], pagamentoRef.id)
+                    );
+                    transaction.set(pagamentoLedgerRef, {
+                        tipo: 'pagamento',
+                        origemTipo: 'PAGAMENTO_DESPESA',
+                        origemParentId: despesaIds[index],
+                        origemId: pagamentoRef.id,
+                        dataTransacao,
+                        valorPrincipal: base,
+                        valorBase: base,
+                        juros: jurosItem,
+                        desconto: descontoItem,
+                        valorMovimentado,
+                        contaBancariaId: contaSaidaId,
+                        conciliado: false,
+                        dataConciliacao: null,
+                        usuarioConciliacao: null,
+                        estornado: false,
+                        migratedFromLegacy: false,
+                        createdAt: serverTimestamp()
+                    });
+
+                    const updateData = {
+                        totalPago,
+                        valorSaldo: novoSaldo,
+                        totalDescontos,
+                        totalJuros,
+                        status: novoStatus,
+                    };
+                    if (novaDataVencimento && despesaIds.length === 1) updateData.vencimento = novaDataVencimento;
+                    transaction.update(despesaRefs[index], updateData);
+
+                    if (valorMovimentado > 0) {
+                        const movRef = doc(collection(db, 'users', userId, 'movimentacoesBancarias'));
+                        transaction.set(movRef, {
+                            contaBancariaId: contaSaidaId,
+                            contaBancariaNome: contaSaidaNome,
+                            dataTransacao,
+                            valor: -valorMovimentado,
+                            descricao: `Pagamento: ${data.descricao}`,
+                            origemTipo: 'PAGAMENTO_DESPESA',
+                            origemId: pagamentoRef.id,
+                            origemParentId: despesaIds[index],
+                            origemDescricao: `Pagamento Despesa #${data.numeroDocumento || despesaIds[index].substring(0, 4)}`,
+                            conciliado: false,
+                            dataConciliacao: null,
+                            usuarioConciliacao: null,
+                            estornado: false,
+                            estornoDeId: null,
+                            createdAt: serverTimestamp(),
+                            adminId: userId
+                        });
+                    }
                 });
             });
 
-            console.log("Transação de pagamento e movimentação bancária concluídas com sucesso!");
+            console.log("Pagamentos e movimentações bancárias concluídos com sucesso!");
             closePagarModal();
             closeConfirmarParcialModal();
-
         } catch (error) {
             console.error("Erro na transação de pagamento: ", error);
-            alert("Falha ao processar o pagamento. Verifique os dados e tente novamente. Detalhes: " + error);
+            alert("Falha ao processar o pagamento. Verifique os dados e tente novamente. Detalhes: " + error.message);
         }
     }
 
@@ -7834,7 +7929,13 @@
         const expenseId = document.getElementById('despesa-id').value;
         const formaPagamento = document.getElementById('forma-pagamento').value;
         const baseDescricao = document.getElementById('despesa-descricao').value;
-        const valorOriginalCents = toCents(document.getElementById('despesa-valor').value);
+            let valorOriginalCents;
+            try {
+                valorOriginalCents = readMoneyInput(document.getElementById('despesa-valor'), 'Valor da despesa', { required: true, allowZero: false });
+            } catch (error) {
+                alert(error.message);
+                return;
+            }
         const vencimentoOriginal = document.getElementById('despesa-vencimento').value;
 
         try {
@@ -7854,6 +7955,30 @@
                 });
                 closeModal();
                 return;
+            }
+
+            let initialPayment = null;
+            if (marcarPagoCheckbox?.checked) {
+                if (formaPagamento === 'parcelado' || formaPagamento === 'recorrente') {
+                    alert('Para títulos parcelados ou recorrentes, salve primeiro e registre a baixa na tela de contas a pagar.');
+                    return;
+                }
+                try {
+                    const paymentValue = readMoneyInput(document.getElementById('pagamento-valor'), 'Valor do pagamento inicial', { required: true, allowZero: false });
+                    if (paymentValue > valorOriginalCents) throw new Error('O pagamento inicial não pode exceder o valor da despesa.');
+                    const paymentDate = document.getElementById('pagamento-data').value;
+                    const paymentAccount = document.getElementById('pagamento-conta');
+                    if (!paymentDate || !paymentAccount.value) throw new Error('Informe a data e a conta do pagamento inicial.');
+                    initialPayment = {
+                        principal: paymentValue,
+                        dataTransacao: paymentDate,
+                        contaId: paymentAccount.value,
+                        contaNome: paymentAccount.options[paymentAccount.selectedIndex]?.text || ''
+                    };
+                } catch (error) {
+                    alert(error.message);
+                    return;
+                }
             }
 
             // --- CREATE LOGIC (New functionality for installments and recurring) ---
@@ -7912,7 +8037,7 @@
                     } else if (intervaloMeses === 0.25) { // Semanal
                          vencimentoIteracao.setDate(vencimentoIteracao.getDate() + (i * 7));
                     } else { // Mensal, Bimestral, etc.
-                        vencimentoIteracao.setMonth(vencimentoIteracao.getMonth() + (i * intervaloMeses));
+                        vencimentoIteracao = addMonthsClamped(dataVencimento, i * intervaloMeses);
                     }
 
                     despesasParaCriar.push({
@@ -7943,6 +8068,78 @@
                 for (const despesa of despesasParaCriar) {
                     const newDocRef = doc(userRef); // Firestore generates a new ID
                     despesa.numeroDocumento = String(nextNumber).padStart(4, '0');
+
+                    if (initialPayment && despesasParaCriar.length === 1) {
+                        despesa.totalPago = initialPayment.principal;
+                        despesa.valorSaldo = despesa.valorOriginal - initialPayment.principal;
+                        despesa.status = deriveTitleStatus(
+                            despesa.valorSaldo,
+                            despesa.totalPago,
+                            despesa.vencimento,
+                            'Pago',
+                            'Pago Parcialmente'
+                        );
+
+                        const pagamentoRef = doc(collection(newDocRef, 'pagamentos'));
+                        transaction.set(pagamentoRef, {
+                            tipoTransacao: 'Pagamento',
+                            dataTransacao: initialPayment.dataTransacao,
+                            valorPrincipal: initialPayment.principal,
+                            jurosPagos: 0,
+                            descontosAplicados: 0,
+                            valorMovimentado: initialPayment.principal,
+                            contaSaidaId: initialPayment.contaId,
+                            usuarioResponsavel: currentUserName || 'N/A',
+                            createdAt: serverTimestamp()
+                        });
+
+                        const initialPaymentLedgerRef = doc(
+                            db,
+                            'users',
+                            userId,
+                            'movimentacoesFinanceiras',
+                            financialMovementDocId('pagamento', newDocRef.id, pagamentoRef.id)
+                        );
+                        transaction.set(initialPaymentLedgerRef, {
+                            tipo: 'pagamento',
+                            origemTipo: 'PAGAMENTO_DESPESA',
+                            origemParentId: newDocRef.id,
+                            origemId: pagamentoRef.id,
+                            dataTransacao: initialPayment.dataTransacao,
+                            valorPrincipal: initialPayment.principal,
+                            juros: 0,
+                            desconto: 0,
+                            valorMovimentado: initialPayment.principal,
+                            contaBancariaId: initialPayment.contaId,
+                            conciliado: false,
+                            dataConciliacao: null,
+                            usuarioConciliacao: null,
+                            estornado: false,
+                            migratedFromLegacy: false,
+                            createdAt: serverTimestamp()
+                        });
+
+                        const movimentoInicialRef = doc(collection(db, 'users', userId, 'movimentacoesBancarias'));
+                        transaction.set(movimentoInicialRef, {
+                            contaBancariaId: initialPayment.contaId,
+                            contaBancariaNome: initialPayment.contaNome,
+                            dataTransacao: initialPayment.dataTransacao,
+                            valor: -initialPayment.principal,
+                            descricao: `Pagamento inicial: ${baseDescricao}`,
+                            origemTipo: 'PAGAMENTO_DESPESA',
+                            origemId: pagamentoRef.id,
+                            origemParentId: newDocRef.id,
+                            origemDescricao: `Pagamento Despesa #${despesa.numeroDocumento}`,
+                            conciliado: false,
+                            dataConciliacao: null,
+                            usuarioConciliacao: null,
+                            estornado: false,
+                            estornoDeId: null,
+                            createdAt: serverTimestamp(),
+                            adminId: userId
+                        });
+                    }
+
                     transaction.set(newDocRef, despesa);
                     nextNumber++;
                 }
@@ -7970,7 +8167,13 @@
             const receitaId = document.getElementById('receita-id').value;
             const formaPagamento = document.getElementById('receita-forma-pagamento').value;
             const baseDescricao = document.getElementById('receita-descricao').value;
-            const valorOriginalCents = toCents(document.getElementById('receita-valor').value);
+            let valorOriginalCents;
+            try {
+                valorOriginalCents = readMoneyInput(document.getElementById('receita-valor'), 'Valor da receita', { required: true, allowZero: false });
+            } catch (error) {
+                alert(error.message);
+                return;
+            }
             const vencimentoOriginal = document.getElementById('receita-vencimento').value;
             const userRef = collection(db, 'users', userId, 'receitas');
             const counterRef = doc(db, 'users', userId, 'counters', 'receitas');
@@ -8012,6 +8215,11 @@
                     totalRecebido: 0,
                 };
 
+                if (marcarRecebidoCheckbox?.checked && formaPagamento !== 'a_vista') {
+                    alert('Para receitas parceladas ou recorrentes, salve primeiro e registre o recebimento na tela de contas a receber.');
+                    return;
+                }
+
                 await runTransaction(db, async (transaction) => {
                     const counterDoc = await transaction.get(counterRef);
                     let nextNumber = counterDoc.exists() ? counterDoc.data().currentNumber + 1 : 1;
@@ -8035,7 +8243,7 @@
                                 vencimentoParcela = new Date(dataVencimentoBase.getTime());
                             } else {
                                 if (intervalo === 'mensal') {
-                                    vencimentoParcela = new Date(dataVencimentoBase.getFullYear(), dataVencimentoBase.getMonth() + i, dataVencimentoBase.getDate());
+                                    vencimentoParcela = addMonthsClamped(dataVencimentoBase, i);
                                 } else { // '30' for 30 days
                                     vencimentoParcela = new Date(dataVencimentoBase.getTime());
                                     vencimentoParcela.setDate(vencimentoParcela.getDate() + (i * 30));
@@ -8098,17 +8306,32 @@
                         };
 
                         if (marcarRecebidoCheckbox.checked) {
-                            const valorRecebidoCents = toCents(document.getElementById('recebimento-valor').value);
+                            const valorRecebidoCents = readMoneyInput(document.getElementById('recebimento-valor'), 'Valor do recebimento inicial', { required: true, allowZero: false });
+                            if (valorRecebidoCents > receitaData.valorOriginal) {
+                                throw new Error('O recebimento inicial não pode exceder o valor da receita.');
+                            }
+                            const recebimentoInicialData = document.getElementById('recebimento-data').value;
+                            const recebimentoInicialConta = document.getElementById('recebimento-conta');
+                            if (!recebimentoInicialData || !recebimentoInicialConta.value) {
+                                throw new Error('Informe a data e a conta do recebimento inicial.');
+                            }
                             receitaData.totalRecebido = valorRecebidoCents;
                             receitaData.saldoPendente = receitaData.valorOriginal - valorRecebidoCents;
-                            receitaData.status = receitaData.saldoPendente <= 0 ? 'Recebido' : 'Recebido Parcialmente';
+                            receitaData.status = deriveTitleStatus(
+                                receitaData.saldoPendente,
+                                valorRecebidoCents,
+                                receitaData.dataVencimento,
+                                'Recebido',
+                                'Recebido Parcialmente'
+                            );
 
                             const recebimentoRef = doc(collection(newDocRef, 'recebimentos'));
                             transaction.set(recebimentoRef, {
                                 tipoTransacao: "Recebimento",
-                                dataTransacao: document.getElementById('recebimento-data').value,
+                                dataTransacao: recebimentoInicialData,
                                 valorPrincipal: valorRecebidoCents,
                                 jurosRecebidos: 0,
+                                valorMovimentado: valorRecebidoCents,
                                 descontosConcedidos: 0,
                                 contaEntradaId: document.getElementById('recebimento-conta').value,
                                 usuarioResponsavel: currentUserName || "N/A",
@@ -8127,17 +8350,39 @@
                                 origemTipo: 'RECEBIMENTO_RECEITA',
                                 origemParentId: newDocRef.id,
                                 origemId: recebimentoRef.id,
-                                dataTransacao: document.getElementById('recebimento-data').value,
+                                dataTransacao: recebimentoInicialData,
                                 valorPrincipal: valorRecebidoCents,
                                 juros: 0,
+                                valorMovimentado: valorRecebidoCents,
                                 desconto: 0,
-                                contaBancariaId: document.getElementById('recebimento-conta').value,
+                                contaBancariaId: recebimentoInicialConta.value,
                                 conciliado: false,
                                 dataConciliacao: null,
                                 usuarioConciliacao: null,
                                 estornado: false,
                                 migratedFromLegacy: false,
                                 createdAt: serverTimestamp()
+                            });
+
+                            const contaEntradaInicial = document.getElementById('recebimento-conta');
+                            const movimentoInicialRef = doc(collection(db, 'users', userId, 'movimentacoesBancarias'));
+                            transaction.set(movimentoInicialRef, {
+                                contaBancariaId: contaEntradaInicial.value,
+                                contaBancariaNome: contaEntradaInicial.options[contaEntradaInicial.selectedIndex]?.text || '',
+                                dataTransacao: document.getElementById('recebimento-data').value,
+                                valor: valorRecebidoCents,
+                                descricao: `Recebimento inicial: ${baseDescricao}`,
+                                origemTipo: 'RECEBIMENTO_RECEITA',
+                                origemId: recebimentoRef.id,
+                                origemParentId: newDocRef.id,
+                                origemDescricao: `Recebimento Receita #${receitaData.numeroDocumento}`,
+                                conciliado: false,
+                                dataConciliacao: null,
+                                usuarioConciliacao: null,
+                                estornado: false,
+                                estornoDeId: null,
+                                createdAt: serverTimestamp(),
+                                adminId: userId
                             });
                         }
                         transaction.set(newDocRef, receitaData);
@@ -8209,25 +8454,35 @@ async function handleDesdobrarSubmit() {
     const newReceitasData = [];
     const parcelaRows = desdobrarParcelasContainer.querySelectorAll('tbody > tr');
     let hasInvalidData = false;
+    let validationError = '';
 
     parcelaRows.forEach(row => {
         const valorInput = row.querySelector('.desdobrar-valor-parcela');
         const vencimentoInput = row.querySelector('.desdobrar-vencimento-parcela');
         const descricaoInput = row.querySelector('.desdobrar-descricao-parcela');
+        let valor = 0;
 
-        if (!valorInput.value || !vencimentoInput.value || !descricaoInput.value) {
+        if (!vencimentoInput.value || !descricaoInput.value) {
             hasInvalidData = true;
+            validationError ||= 'Todos os campos das novas parcelas devem ser preenchidos.';
+        }
+
+        try {
+            valor = readMoneyInput(valorInput, 'Valor da parcela', { required: true, allowZero: false });
+        } catch (error) {
+            hasInvalidData = true;
+            validationError ||= error.message;
         }
 
         newReceitasData.push({
-            valor: toCents(valorInput.value),
+            valor,
             dataVencimento: vencimentoInput.value,
             descricao: descricaoInput.value,
         });
     });
 
     if (hasInvalidData) {
-        alert("Todos os campos das novas parcelas devem ser preenchidos.");
+        alert(validationError || 'Todos os campos das novas parcelas devem ser preenchidos.');
         return;
     }
 
@@ -8337,7 +8592,7 @@ async function openDesdobrarModal(receitaId) {
     document.getElementById('desdobrar-original-descricao').textContent = originalReceitaData.descricao;
     const vencimento = new Date((originalReceitaData.dataVencimento || originalReceitaData.vencimento) + 'T00:00:00');
     document.getElementById('desdobrar-original-vencimento').textContent = vencimento.toLocaleDateString('pt-BR');
-    document.getElementById('desdobrar-original-saldo').textContent = formatCurrency(originalReceitaData.saldoPendente);
+    document.getElementById('desdobrar-original-saldo').textContent = formatCurrency(calculateOpenBalance(originalReceitaData, 'receita'));
 
     desdobrarReceitaModal.classList.remove('hidden');
     desdobrarNumeroParcelasInput.value = 2;
@@ -8347,7 +8602,7 @@ async function openDesdobrarModal(receitaId) {
 desdobrarNumeroParcelasInput.addEventListener('input', () => {
     const numParcelas = parseInt(desdobrarNumeroParcelasInput.value, 10);
     if (numParcelas > 1 && originalReceitaData) {
-        generateParcelasTable(numParcelas, originalReceitaData.saldoPendente, originalReceitaData.descricao);
+        generateParcelasTable(numParcelas, calculateOpenBalance(originalReceitaData, 'receita'), originalReceitaData.descricao);
     } else {
         desdobrarParcelasContainer.innerHTML = '';
     }
@@ -8374,8 +8629,7 @@ function generateParcelasTable(numParcelas, saldoOriginal, descricaoOriginal) {
 
     for (let i = 0; i < numParcelas; i++) {
         const valorParcela = valorBaseParcela + (i < resto ? 1 : 0);
-        const novaDataVencimento = new Date(dataVencimentoOriginal);
-        novaDataVencimento.setMonth(novaDataVencimento.getMonth() + i + 1);
+        const novaDataVencimento = addMonthsClamped(dataVencimentoOriginal, i + 1);
 
         tableHTML += `
             <tr>
@@ -8399,11 +8653,12 @@ function generateParcelasTable(numParcelas, saldoOriginal, descricaoOriginal) {
 function validateParcelasSum() {
     if (!originalReceitaData) return;
 
-    const saldoOriginalCents = originalReceitaData.saldoPendente;
+    const saldoOriginalCents = calculateOpenBalance(originalReceitaData, 'receita');
     let somaAtualCents = 0;
     const parcelasInputs = desdobrarParcelasContainer.querySelectorAll('.desdobrar-valor-parcela');
     parcelasInputs.forEach(input => {
-        somaAtualCents += toCents(input.value);
+        const cents = parseMoneyToCents(input.value);
+        if (cents !== null && cents >= 0) somaAtualCents += cents;
     });
 
     document.getElementById('desdobrar-soma-parcelas').textContent = formatCurrency(somaAtualCents);
@@ -8547,11 +8802,11 @@ function validateParcelasSum() {
             document.getElementById('view-receita-obs').textContent = data.obs || 'Nenhuma';
             document.getElementById('view-receita-numero-documento').textContent = data.numeroDocumento || 'N/A';
 
-            const valorOriginal = data.valorOriginal || 0;
-            const totalRecebido = data.totalRecebido || 0;
-            const totalDescontos = data.totalDescontos || 0;
-            const totalJuros = data.totalJuros || 0;
-            const saldoPendente = data.saldoPendente ?? (valorOriginal + totalJuros - totalRecebido - totalDescontos);
+            const valorOriginal = Number(data.valorOriginal ?? data.valor ?? 0);
+            const totalRecebido = Number(data.totalRecebido ?? 0);
+            const totalDescontos = Number(data.totalDescontos ?? 0);
+            const totalJuros = Number(data.totalJuros ?? 0);
+            const saldoPendente = calculateOpenBalance(data, 'receita');
 
 
             document.getElementById('view-receita-valor-original').textContent = formatCurrency(valorOriginal);
@@ -8562,7 +8817,10 @@ function validateParcelasSum() {
 
 
             const statusEl = document.getElementById('view-receita-status');
-            statusEl.textContent = data.status || 'Pendente';
+            const statusText = data.status === 'Desdobrado'
+                ? 'Desdobrado'
+                : deriveTitleStatus(saldoPendente, totalRecebido, data.dataVencimento || data.vencimento, 'Recebido', 'Recebido Parcialmente');
+            statusEl.textContent = statusText;
             const statusClasses = { 'Recebido': 'bg-green-100 text-green-800', 'Recebido Parcialmente': 'bg-yellow-100 text-yellow-800', 'Pendente': 'bg-blue-100 text-blue-800', 'Vencido': 'bg-red-100 text-red-800' };
             statusEl.className = `text-base font-medium px-2 py-1 rounded-full inline-block ${statusClasses[statusEl.textContent] || 'bg-gray-100'}`;
 
@@ -8663,27 +8921,26 @@ function validateParcelasSum() {
 
                 const receitaData = receitaDoc.data();
                 const recebimentoData = recebimentoDoc.data();
-                const valorPrincipalEstornado = recebimentoData.valorPrincipal || 0;
-                const jurosEstornados = recebimentoData.jurosRecebidos || 0;
-                const descontosEstornados = recebimentoData.descontosConcedidos || 0;
+                const valorPrincipalEstornado = Number(recebimentoData.valorPrincipal ?? recebimentoData.valorBase ?? 0);
+                const jurosEstornados = Number(recebimentoData.jurosRecebidos ?? 0);
+                const descontosEstornados = Number(recebimentoData.descontosConcedidos ?? 0);
+                const valorMovimentadoEstornado = Number(
+                    recebimentoData.valorMovimentado ??
+                    (valorPrincipalEstornado + jurosEstornados - descontosEstornados)
+                );
 
-                const novoTotalRecebido = receitaData.totalRecebido - valorPrincipalEstornado;
-                const novoTotalJuros = receitaData.totalJuros - jurosEstornados;
-                const novoTotalDescontos = receitaData.totalDescontos - descontosEstornados;
-                const novoSaldoPendente = (receitaData.valorOriginal + novoTotalJuros) - novoTotalRecebido - novoTotalDescontos;
-
-                let novoStatus;
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const vencimento = new Date((receitaData.dataVencimento || receitaData.vencimento) + 'T00:00:00');
-
-                if (novoSaldoPendente <= 0) {
-                    novoStatus = 'Recebido';
-                } else if (novoTotalRecebido > 0) {
-                    novoStatus = 'Recebido Parcialmente';
-                } else {
-                     novoStatus = vencimento < today ? 'Vencido' : 'Pendente';
-                }
+                const novoTotalRecebido = Math.max(0, Number(receitaData.totalRecebido ?? 0) - valorPrincipalEstornado);
+                const novoTotalJuros = Math.max(0, Number(receitaData.totalJuros ?? 0) - jurosEstornados);
+                const novoTotalDescontos = Math.max(0, Number(receitaData.totalDescontos ?? 0) - descontosEstornados);
+                const valorOriginal = Number(receitaData.valorOriginal ?? receitaData.valor ?? 0);
+                const novoSaldoPendente = valorOriginal + novoTotalJuros - novoTotalRecebido - novoTotalDescontos;
+                const novoStatus = deriveTitleStatus(
+                    novoSaldoPendente,
+                    novoTotalRecebido,
+                    receitaData.dataVencimento || receitaData.vencimento,
+                    'Recebido',
+                    'Recebido Parcialmente'
+                );
 
                 transaction.set(novoEstornoRef, {
                     tipoTransacao: "Estorno",
@@ -8691,6 +8948,7 @@ function validateParcelasSum() {
                     valorPrincipal: valorPrincipalEstornado,
                     jurosRecebidos: jurosEstornados,
                     descontosConcedidos: descontosEstornados,
+                    valorMovimentado: valorMovimentadoEstornado,
                     usuarioResponsavel: currentUserName || "N/A",
                     motivoEstorno: motivo,
                     recebimentoOriginalId: recebimentoId,
@@ -8747,7 +9005,7 @@ function validateParcelasSum() {
             docs.forEach(docSnap => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    totalSaldoPendente += data.saldoPendente || 0;
+                    totalSaldoPendente += calculateOpenBalance(data, 'receita');
                 }
             });
 
@@ -8791,28 +9049,35 @@ function validateParcelasSum() {
             const userId = effectiveUserId;
             if (!userId) return;
 
-            const receitaId = document.getElementById('receber-receita-id').value.split(',')[0];
-            if (!receitaId) return;
+            const receitaIds = getSelectedIdsFromField('receber-receita-id');
+            if (receitaIds.length === 0) return;
 
-            const valorFinalRecebidoCents = toCents(document.getElementById('receber-valor-final').value);
-            const descontosCents = toCents(document.getElementById('receber-descontos').value);
+            let valorBaseCents;
+            let descontosCents;
+            try {
+                valorBaseCents = readMoneyInput(document.getElementById('receber-valor'), 'Valor a receber', { required: true, allowZero: false });
+                descontosCents = readMoneyInput(document.getElementById('receber-descontos'), 'Descontos', { allowZero: true });
+            } catch (error) {
+                alert(error.message);
+                return;
+            }
 
             try {
-                const receitaRef = doc(db, 'users', userId, 'receitas', receitaId);
-                const receitaSnap = await getDoc(receitaRef);
-                if (!receitaSnap.exists()) return;
+                const receitaRefs = receitaIds.map(id => doc(db, 'users', userId, 'receitas', id));
+                const snapshots = await Promise.all(receitaRefs.map(receitaRef => getDoc(receitaRef)));
+                if (snapshots.some(snapshot => !snapshot.exists())) {
+                    throw new Error('Uma das receitas selecionadas não foi encontrada.');
+                }
+                const saldoPendenteTotal = snapshots.reduce((total, snapshot) => total + calculateOpenBalance(snapshot.data(), 'receita'), 0);
 
-                const data = receitaSnap.data();
-                const saldoPendenteAtualCents = data.saldoPendente ?? (data.valorOriginal - (data.totalRecebido || 0));
-
-                // If cash received + discount is less than the balance, it's a partial payment.
-                if ((valorFinalRecebidoCents + descontosCents) < saldoPendenteAtualCents) {
+                // Juros e principal anulam-se no saldo; desconto reduz o saldo e o valor-base é o que liquida o título.
+                if (valorBaseCents + descontosCents < saldoPendenteTotal) {
                     abrirModalConfirmacaoRecebimentoParcial();
                 } else {
                     prosseguirComRecebimento();
                 }
             } catch (error) {
-                console.error("Erro ao verificar saldo da receita:", error);
+                console.error("Erro ao verificar saldo das receitas:", error);
                 alert("Erro ao verificar saldo: " + error.message);
             }
         });
@@ -8838,121 +9103,155 @@ function validateParcelasSum() {
                 alert("Erro: Usuário não autenticado.");
                 return;
             }
-            const receitaId = document.getElementById('receber-receita-id').value.split(',')[0];
-            if (!receitaId) {
-                alert("Erro: ID da receita não encontrado.");
+
+            const receitaIds = getSelectedIdsFromField('receber-receita-id');
+            if (receitaIds.length === 0) {
+                alert("Erro: nenhuma receita selecionada.");
+                return;
+            }
+            if (receitaIds.length > 100) {
+                alert("Selecione no máximo 100 receitas por operação.");
                 return;
             }
 
-            const valorPrincipalCents = toCents(document.getElementById('receber-valor-final').value);
-            const descontosCents = toCents(document.getElementById('receber-descontos').value);
-            const jurosCents = toCents(document.getElementById('receber-juros-multa').value);
+            let valorBaseCents;
+            let descontosCents;
+            let jurosCents;
+            try {
+                valorBaseCents = readMoneyInput(document.getElementById('receber-valor'), 'Valor a receber', { required: true, allowZero: false });
+                descontosCents = readMoneyInput(document.getElementById('receber-descontos'), 'Descontos', { allowZero: true });
+                jurosCents = readMoneyInput(document.getElementById('receber-juros-multa'), 'Juros/multa', { allowZero: true });
+            } catch (error) {
+                alert(error.message);
+                return;
+            }
+
+            const valorMovimentadoCents = valorBaseCents + jurosCents - descontosCents;
+            if (valorMovimentadoCents < 0) {
+                alert("O desconto não pode ser maior que o valor a receber acrescido dos juros.");
+                return;
+            }
+
             const dataTransacao = document.getElementById('receber-data').value;
-            const contaEntradaId = document.getElementById('receber-conta-entrada').value;
+            const contaEntradaSelect = document.getElementById('receber-conta-entrada');
+            const contaEntradaId = contaEntradaSelect.value;
+            const contaEntradaNome = contaEntradaSelect.options[contaEntradaSelect.selectedIndex]?.text || '';
             const novaDataVencimento = document.getElementById('parcial-recebimento-nova-data-vencimento').value;
+            if (!dataTransacao || !contaEntradaId) {
+                alert("Informe a data e a conta de entrada.");
+                return;
+            }
 
-
-            const receitaRef = doc(db, 'users', userId, 'receitas', receitaId);
-            const recebimentosRef = collection(receitaRef, 'recebimentos');
-            const novoRecebimentoRef = doc(recebimentosRef);
+            const receitaRefs = receitaIds.map(id => doc(db, 'users', userId, 'receitas', id));
+            const recebimentoRefs = receitaIds.map(id => doc(collection(doc(db, 'users', userId, 'receitas', id), 'recebimentos')));
 
             try {
                 await runTransaction(db, async (transaction) => {
-                    const receitaDoc = await transaction.get(receitaRef);
-                    if (!receitaDoc.exists()) {
-                        throw "Receita não encontrada.";
-                    }
-
-                    const data = receitaDoc.data();
-
-                    const novoTotalRecebido = (data.totalRecebido || 0) + valorPrincipalCents;
-                    const novoTotalDescontos = (data.totalDescontos || 0) + descontosCents;
-                    const novoTotalJuros = (data.totalJuros || 0) + jurosCents;
-                    const novoSaldoPendente = (data.valorOriginal + novoTotalJuros) - novoTotalRecebido - novoTotalDescontos;
-
-                    let novoStatus;
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    const vencimento = new Date((data.dataVencimento || data.vencimento) + 'T00:00:00');
-
-
-                    if (novoSaldoPendente <= 0) {
-                        novoStatus = 'Recebido';
-                    } else if (novoTotalRecebido > 0) {
-                        novoStatus = 'Recebido Parcialmente';
-                    } else {
-                        novoStatus = vencimento < today ? 'Vencido' : 'Pendente';
-                    }
-
-                    transaction.set(novoRecebimentoRef, {
-                        tipoTransacao: "Recebimento",
-                        dataTransacao: dataTransacao,
-                        valorPrincipal: valorPrincipalCents,
-                        jurosRecebidos: jurosCents,
-                        descontosConcedidos: descontosCents,
-                        contaEntradaId: contaEntradaId,
-                        usuarioResponsavel: currentUserName || "N/A",
-                        createdAt: serverTimestamp()
+                    const snapshots = await Promise.all(receitaRefs.map(ref => transaction.get(ref)));
+                    const receitas = snapshots.map((snapshot, index) => {
+                        if (!snapshot.exists()) throw new Error(`Receita não encontrada: ${receitaIds[index]}`);
+                        return snapshot.data();
                     });
-
-                    const recebimentoLedgerRef = doc(
-                        db,
-                        'users',
-                        userId,
-                        'movimentacoesFinanceiras',
-                        financialMovementDocId('recebimento', receitaId, novoRecebimentoRef.id)
-                    );
-                    transaction.set(recebimentoLedgerRef, {
-                        tipo: 'recebimento',
-                        origemTipo: 'RECEBIMENTO_RECEITA',
-                        origemParentId: receitaId,
-                        origemId: novoRecebimentoRef.id,
-                        dataTransacao,
-                        valorPrincipal: valorPrincipalCents,
-                        juros: jurosCents,
-                        desconto: descontosCents,
-                        contaBancariaId: contaEntradaId,
-                        conciliado: false,
-                        dataConciliacao: null,
-                        usuarioConciliacao: null,
-                        estornado: false,
-                        migratedFromLegacy: false,
-                        createdAt: serverTimestamp()
-                    });
-
-                    const updateData = {
-                        totalRecebido: novoTotalRecebido,
-                        saldoPendente: novoSaldoPendente,
-                        totalDescontos: novoTotalDescontos,
-                        totalJuros: novoTotalJuros,
-                        status: novoStatus,
-                    };
-
-                    if (novaDataVencimento) {
-                        updateData.dataVencimento = novaDataVencimento;
+                    const saldos = receitas.map(data => calculateOpenBalance(data, 'receita'));
+                    if (saldos.some(saldo => !Number.isInteger(saldo) || saldo <= 0)) {
+                        throw new Error('Uma das receitas selecionadas não possui saldo positivo em aberto.');
                     }
 
-                    transaction.update(receitaRef, updateData);
+                    const saldoTotal = saldos.reduce((sum, saldo) => sum + saldo, 0);
+                    if (valorBaseCents > saldoTotal) {
+                        throw new Error(`O valor a receber (${formatCurrency(valorBaseCents)}) excede o saldo selecionado (${formatCurrency(saldoTotal)}).`);
+                    }
 
-                    // 3. Create the bank transaction movement for the receipt
-                    const movRef = doc(collection(db, 'users', userId, 'movimentacoesBancarias'));
-                    transaction.set(movRef, {
-                        contaBancariaId: contaEntradaId,
-                        contaBancariaNome: document.getElementById('receber-conta-entrada').options[document.getElementById('receber-conta-entrada').selectedIndex].text,
-                        dataTransacao: dataTransacao,
-                        valor: Math.abs(valorPrincipalCents), // Positive value for a receipt
-                        descricao: `Recebimento: ${data.descricao}`,
-                        origemTipo: 'RECEBIMENTO_RECEITA',
-                        origemId: novoRecebimentoRef.id, // Link to the receipt document in the subcollection
-                        origemParentId: receitaId,
-                        origemDescricao: `Recebimento Receita #${data.numeroDocumento || receitaId.substring(0,4)}`,
-                        conciliado: false,
-                        dataConciliacao: null,
-                        usuarioConciliacao: null,
-                        estornado: false,
-                        estornoDeId: null,
-                        createdAt: serverTimestamp(),
-                        adminId: userId
+                    const bases = allocateProportionally(valorBaseCents, saldos);
+                    const juros = allocateProportionally(jurosCents, bases);
+                    const descontos = allocateProportionally(descontosCents, bases);
+
+                    receitas.forEach((data, index) => {
+                        const base = bases[index];
+                        if (base === 0) return;
+
+                        const jurosItem = juros[index];
+                        const descontoItem = descontos[index];
+                        const valorMovimentado = base + jurosItem - descontoItem;
+                        const totalRecebido = Number(data.totalRecebido ?? 0) + base;
+                        const totalJuros = Number(data.totalJuros ?? 0) + jurosItem;
+                        const totalDescontos = Number(data.totalDescontos ?? 0) + descontoItem;
+                        const valorOriginal = Number(data.valorOriginal ?? data.valor ?? 0);
+                        const novoSaldoPendente = valorOriginal + totalJuros - totalRecebido - totalDescontos;
+                        const novoStatus = deriveTitleStatus(novoSaldoPendente, totalRecebido, novaDataVencimento || data.dataVencimento || data.vencimento, 'Recebido', 'Recebido Parcialmente');
+                        const recebimentoRef = recebimentoRefs[index];
+
+                        transaction.set(recebimentoRef, {
+                            tipoTransacao: "Recebimento",
+                            dataTransacao,
+                            valorPrincipal: base,
+                            valorBase: base,
+                            jurosRecebidos: jurosItem,
+                            descontosConcedidos: descontoItem,
+                            valorMovimentado,
+                            contaEntradaId,
+                            usuarioResponsavel: currentUserName || "N/A",
+                            createdAt: serverTimestamp()
+                        });
+
+                        const recebimentoLedgerRef = doc(
+                            db,
+                            'users',
+                            userId,
+                            'movimentacoesFinanceiras',
+                            financialMovementDocId('recebimento', receitaIds[index], recebimentoRef.id)
+                        );
+                        transaction.set(recebimentoLedgerRef, {
+                            tipo: 'recebimento',
+                            origemTipo: 'RECEBIMENTO_RECEITA',
+                            origemParentId: receitaIds[index],
+                            origemId: recebimentoRef.id,
+                            dataTransacao,
+                            valorPrincipal: base,
+                            valorBase: base,
+                            juros: jurosItem,
+                            desconto: descontoItem,
+                            valorMovimentado,
+                            contaBancariaId: contaEntradaId,
+                            conciliado: false,
+                            dataConciliacao: null,
+                            usuarioConciliacao: null,
+                            estornado: false,
+                            migratedFromLegacy: false,
+                            createdAt: serverTimestamp()
+                        });
+
+                        const updateData = {
+                            totalRecebido,
+                            saldoPendente: novoSaldoPendente,
+                            totalDescontos,
+                            totalJuros,
+                            status: novoStatus,
+                        };
+                        if (novaDataVencimento && receitaIds.length === 1) updateData.dataVencimento = novaDataVencimento;
+                        transaction.update(receitaRefs[index], updateData);
+
+                        if (valorMovimentado > 0) {
+                            const movRef = doc(collection(db, 'users', userId, 'movimentacoesBancarias'));
+                            transaction.set(movRef, {
+                                contaBancariaId: contaEntradaId,
+                                contaBancariaNome: contaEntradaNome,
+                                dataTransacao,
+                                valor: valorMovimentado,
+                                descricao: `Recebimento: ${data.descricao}`,
+                                origemTipo: 'RECEBIMENTO_RECEITA',
+                                origemId: recebimentoRef.id,
+                                origemParentId: receitaIds[index],
+                                origemDescricao: `Recebimento Receita #${data.numeroDocumento || receitaIds[index].substring(0, 4)}`,
+                                conciliado: false,
+                                dataConciliacao: null,
+                                usuarioConciliacao: null,
+                                estornado: false,
+                                estornoDeId: null,
+                                createdAt: serverTimestamp(),
+                                adminId: userId
+                            });
+                        }
                     });
                 });
 
@@ -8960,7 +9259,7 @@ function validateParcelasSum() {
                 closeConfirmarRecebimentoParcialModal();
             } catch (error) {
                 console.error("Erro ao registrar recebimento: ", error);
-                alert("Falha ao registrar recebimento: " + error);
+                alert("Falha ao registrar recebimento: " + error.message);
             }
         }
     }
@@ -9071,13 +9370,8 @@ function validateParcelasSum() {
             const tr = receitasTableBody.insertRow();
             tr.setAttribute('data-id', doc.id);
 
-            let statusText = data.status || 'Pendente';
             const vencimentoField = data.dataVencimento || data.vencimento;
             const vencimento = new Date(vencimentoField + 'T00:00:00');
-
-            if (statusText === 'Pendente' && vencimento < today) {
-                statusText = 'Vencido';
-            }
 
             const statusClasses = {
                 'Recebido': 'bg-green-100 text-green-800',
@@ -9086,14 +9380,16 @@ function validateParcelasSum() {
                 'Vencido': 'bg-red-100 text-red-800',
                 'Desdobrado': 'bg-gray-200 text-gray-800',
             };
+
+            const valorOriginal = Number(data.valorOriginal ?? data.valor ?? 0);
+            const totalRecebido = Number(data.totalRecebido ?? 0);
+            const totalDescontos = Number(data.totalDescontos ?? 0);
+            const totalJuros = Number(data.totalJuros ?? 0);
+            const saldoPendente = calculateOpenBalance(data, 'receita');
+            const statusText = data.status === 'Desdobrado'
+                ? 'Desdobrado'
+                : deriveTitleStatus(saldoPendente, totalRecebido, vencimentoField, 'Recebido', 'Recebido Parcialmente');
             const statusClass = statusClasses[statusText] || 'bg-gray-100 text-gray-800';
-
-            const valorOriginal = data.valorOriginal || 0;
-            const totalRecebido = data.totalRecebido || 0;
-            const totalDescontos = data.totalDescontos || 0;
-            const totalJuros = data.totalJuros || 0;
-            const saldoPendente = data.saldoPendente ?? (valorOriginal + totalJuros - totalRecebido - totalDescontos);
-
 
             tr.innerHTML = `
                 <td class="p-4"><input type="checkbox" class="receita-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-id="${escapeHtml(doc.id)}"></td>
@@ -9159,8 +9455,7 @@ function validateParcelasSum() {
         // Recalculate based on the two available fields
         if (dueDate && occurrences) {
             recorrenciaFimOcorrenciasRadio.checked = true;
-            const calculatedEndDate = new Date(dueDate.getTime());
-            calculatedEndDate.setMonth(calculatedEndDate.getMonth() + (multiplier * (occurrences - 1)));
+            const calculatedEndDate = addMonthsClamped(dueDate, multiplier * (occurrences - 1));
             endDateInput.value = calculatedEndDate.toISOString().split('T')[0];
         } else if (dueDate && endDate) {
             if (endDate >= dueDate) {
@@ -9171,8 +9466,7 @@ function validateParcelasSum() {
             }
         } else if (occurrences && endDate) {
             recorrenciaFimOcorrenciasRadio.checked = true;
-            const calculatedStartDate = new Date(endDate.getTime());
-            calculatedStartDate.setMonth(calculatedStartDate.getMonth() - (multiplier * (occurrences - 1)));
+            const calculatedStartDate = addMonthsClamped(endDate, -multiplier * (occurrences - 1));
             dueDateInput.value = calculatedStartDate.toISOString().split('T')[0];
         }
     }
@@ -9212,8 +9506,7 @@ function validateParcelasSum() {
 
         if (dueDate && occurrences) {
             occurrencesRadio.checked = true;
-            const calculatedEndDate = new Date(dueDate.getTime());
-            calculatedEndDate.setMonth(calculatedEndDate.getMonth() + (multiplier * (occurrences - 1)));
+            const calculatedEndDate = addMonthsClamped(dueDate, multiplier * (occurrences - 1));
             endDateInput.value = calculatedEndDate.toISOString().split('T')[0];
         } else if (dueDate && endDate) {
             if (endDate >= dueDate) {
@@ -9224,8 +9517,7 @@ function validateParcelasSum() {
             }
         } else if (occurrences && endDate) {
             occurrencesRadio.checked = true;
-            const calculatedStartDate = new Date(endDate.getTime());
-            calculatedStartDate.setMonth(calculatedStartDate.getMonth() - (multiplier * (occurrences - 1)));
+            const calculatedStartDate = addMonthsClamped(endDate, -multiplier * (occurrences - 1));
             dueDateInput.value = calculatedStartDate.toISOString().split('T')[0];
         }
     }
@@ -9263,7 +9555,13 @@ function validateParcelasSum() {
             const contaOrigemNome = contaOrigemSelect.options[contaOrigemSelect.selectedIndex].text;
             const contaDestinoId = contaDestinoSelect.value;
             const contaDestinoNome = contaDestinoSelect.options[contaDestinoSelect.selectedIndex].text;
-            const valorCents = toCents(document.getElementById('transferencia-valor').value);
+            let valorCents;
+            try {
+                valorCents = readMoneyInput(document.getElementById('transferencia-valor'), 'Valor da transferência', { required: true, allowZero: false });
+            } catch (error) {
+                showFeedback(feedbackId, error.message, true);
+                return;
+            }
             const dataTransacao = document.getElementById('transferencia-data').value;
             const obs = document.getElementById('transferencia-obs').value;
 

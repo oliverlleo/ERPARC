@@ -7,6 +7,34 @@ export function initializeRelatorios(db, userId, common) {
 
     const { formatCurrency, toCents, fromCents, showFeedback } = common;
 
+    function getReceivableBalance(data) {
+        const original = Number(data.valorOriginal ?? data.valor ?? 0);
+        const received = Number(data.totalRecebido ?? 0);
+        const juros = Number(data.totalJuros ?? 0);
+        const descontos = Number(data.totalDescontos ?? 0);
+        return Number(data.saldoPendente ?? (original + juros - received - descontos));
+    }
+
+    function getPayableBalance(data) {
+        const original = Number(data.valorOriginal ?? data.valor ?? 0);
+        const paid = Number(data.totalPago ?? data.valorPago ?? 0);
+        const juros = Number(data.totalJuros ?? 0);
+        const descontos = Number(data.totalDescontos ?? 0);
+        return Number(data.valorSaldo ?? (original + juros - paid - descontos));
+    }
+
+    function getDerivedStatus(data, kind) {
+        const balance = kind === 'pagar' ? getPayableBalance(data) : getReceivableBalance(data);
+        const principal = Number(data[kind === 'pagar' ? 'totalPago' : 'totalRecebido'] ?? 0);
+        if (balance <= 0) return kind === 'pagar' ? 'Pago' : 'Recebido';
+        if (principal > 0) return kind === 'pagar' ? 'Pago Parcialmente' : 'Recebido Parcialmente';
+        const dueValue = kind === 'pagar' ? data.vencimento : (data.dataVencimento || data.vencimento);
+        const dueDate = dueValue ? new Date(`${dueValue}T00:00:00`) : null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return dueDate && !Number.isNaN(dueDate.getTime()) && dueDate < today ? 'Vencido' : 'Pendente';
+    }
+
     // --- Elementos Comuns ---
     const relatorioTabLinks = document.querySelectorAll('.relatorio-tab-link');
     const relatorioTabContents = document.querySelectorAll('.relatorio-tab-content');
@@ -91,15 +119,21 @@ export function initializeRelatorios(db, userId, common) {
             case 'posicao-carteira':
                 dadosParaRenderizar = (filtros.status === 'todos')
                     ? relatorioDadosBase
-                    : relatorioDadosBase.filter(d => d.status === filtros.status);
+                    : relatorioDadosBase.filter(d => getDerivedStatus(d, 'receber') === filtros.status);
                 visualizacaoAreaReceber.innerHTML = renderPosicaoCarteira(dadosParaRenderizar);
                 break;
             case 'inadimplencia':
-                dadosParaRenderizar = relatorioDadosBase.filter(d => d.status === 'Pendente' || d.status === 'Vencido' || d.status === 'Recebido Parcialmente');
+                dadosParaRenderizar = relatorioDadosBase.filter(d => {
+                    const status = getDerivedStatus(d, 'receber');
+                    return status === 'Pendente' || status === 'Vencido' || status === 'Recebido Parcialmente';
+                });
                 visualizacaoAreaReceber.innerHTML = renderInadimplencia(dadosParaRenderizar);
                 break;
             case 'previsao':
-                dadosParaRenderizar = relatorioDadosBase.filter(d => d.status === 'Pendente' || d.status === 'Recebido Parcialmente');
+                dadosParaRenderizar = relatorioDadosBase.filter(d => {
+                    const status = getDerivedStatus(d, 'receber');
+                    return status === 'Pendente' || status === 'Recebido Parcialmente';
+                });
                 visualizacaoAreaReceber.innerHTML = renderPrevisaoRecebimentos(dadosParaRenderizar);
                 break;
             case 'fluxo-caixa-dre':
@@ -148,7 +182,7 @@ export function initializeRelatorios(db, userId, common) {
         };
 
         dadosComAtraso.forEach(d => {
-            const saldo = d.saldoPendente || 0;
+            const saldo = getReceivableBalance(d);
             if (d.diasAtraso <= 30) {
                 buckets['30'].items.push(d);
                 buckets['30'].total += saldo;
@@ -193,7 +227,7 @@ export function initializeRelatorios(db, userId, common) {
                         <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.clienteNome)}</td>
                         <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${new Date(d.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-4 py-2 whitespace-nowrap text-sm text-center font-semibold text-red-700">${d.diasAtraso}</td>
-                        <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">${formatCurrency(d.saldoPendente)}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">${formatCurrency(getReceivableBalance(d))}</td>
                     </tr>`;
             });
 
@@ -227,9 +261,9 @@ export function initializeRelatorios(db, userId, common) {
             if (!categorias[categoriaId]) {
                 categorias[categoriaId] = { nome: categoriaNome, total: 0, recebido: 0, aReceber: 0 };
             }
-            categorias[categoriaId].total += d.valorOriginal || 0;
-            categorias[categoriaId].recebido += d.totalRecebido || 0;
-            categorias[categoriaId].aReceber += d.saldoPendente || 0;
+            categorias[categoriaId].total += Number(d.valorOriginal ?? d.valor ?? 0);
+            categorias[categoriaId].recebido += Number(d.totalRecebido ?? 0);
+            categorias[categoriaId].aReceber += getReceivableBalance(d);
         });
 
         let html = `
@@ -263,16 +297,17 @@ export function initializeRelatorios(db, userId, common) {
 
     function renderPrevisaoRecebimentos(dados) {
         const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
         const previsoes = {};
 
         dados.forEach(d => {
             const dataVencimento = new Date(d.dataVencimento + 'T00:00:00');
-            if (dataVencimento >= hoje) {
+            if (!Number.isNaN(dataVencimento.getTime()) && dataVencimento >= hoje) {
                 const mesAno = `${dataVencimento.getFullYear()}-${String(dataVencimento.getMonth() + 1).padStart(2, '0')}`;
                 if (!previsoes[mesAno]) {
                     previsoes[mesAno] = { total: 0, items: [] };
                 }
-                previsoes[mesAno].total += d.saldoPendente || 0;
+                previsoes[mesAno].total += getReceivableBalance(d);
                 previsoes[mesAno].items.push(d);
             }
         });
@@ -313,7 +348,7 @@ export function initializeRelatorios(db, userId, common) {
                         <td class="px-3 py-2">${escapeHtml(item.clienteNome)}</td>
                         <td class="px-3 py-2">${escapeHtml(item.descricao)}</td>
                         <td class="px-3 py-2">${new Date(item.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                        <td class="px-3 py-2 text-right">${formatCurrency(item.saldoPendente)}</td>
+                        <td class="px-3 py-2 text-right">${formatCurrency(getReceivableBalance(item))}</td>
                     </tr>
                 `;
             });
@@ -354,7 +389,7 @@ export function initializeRelatorios(db, userId, common) {
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.descricao)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${new Date(d.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${formatCurrency(d.valorOriginal)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">${formatCurrency(d.saldoPendente)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">${formatCurrency(getReceivableBalance(d))}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-center">
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">
                                 ${statusText}
@@ -385,11 +420,17 @@ export function initializeRelatorios(db, userId, common) {
                 visualizacaoAreaPagar.innerHTML = renderPosicaoCarteiraPagar(dadosParaRenderizar);
                 break;
             case 'analise-atraso':
-                 dadosParaRenderizar = dadosFiltrados.filter(d => d.status === 'Pendente' || d.status === 'Vencido' || d.status === 'Pago Parcialmente');
+                 dadosParaRenderizar = dadosFiltrados.filter(d => {
+                     const status = getDerivedStatus(d, 'pagar');
+                     return status === 'Pendente' || status === 'Vencido' || status === 'Pago Parcialmente';
+                 });
                  visualizacaoAreaPagar.innerHTML = renderAnaliseAtraso(dadosParaRenderizar);
                 break;
             case 'previsao-desembolsos':
-                dadosParaRenderizar = dadosFiltrados.filter(d => d.status === 'Pendente' || d.status === 'Pago Parcialmente');
+                dadosParaRenderizar = dadosFiltrados.filter(d => {
+                    const status = getDerivedStatus(d, 'pagar');
+                    return status === 'Pendente' || status === 'Pago Parcialmente';
+                });
                 visualizacaoAreaPagar.innerHTML = renderPrevisaoDesembolsos(dadosParaRenderizar);
                 break;
             case 'fluxo-caixa-dre':
@@ -442,7 +483,7 @@ export function initializeRelatorios(db, userId, common) {
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.favorecidoNome)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${new Date(d.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${formatCurrency(d.valorOriginal)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">${formatCurrency(d.valorSaldo)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">${formatCurrency(getPayableBalance(d))}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-center">
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">
                                 ${statusText}
@@ -483,7 +524,7 @@ export function initializeRelatorios(db, userId, common) {
         };
 
         dadosComAtraso.forEach(d => {
-            const saldo = d.valorSaldo || 0;
+            const saldo = getPayableBalance(d);
             const bucket = classifyOverdueBucket(d.diasAtraso);
             if (bucket) buckets[bucket].total += saldo;
         });
@@ -537,7 +578,7 @@ export function initializeRelatorios(db, userId, common) {
                     <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.descricao)}</td>
                     <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${new Date(d.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                     <td class="px-4 py-2 whitespace-nowrap text-sm text-center font-semibold text-red-700">${d.diasAtraso}</td>
-                    <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">${formatCurrency(d.valorSaldo)}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">${formatCurrency(getPayableBalance(d))}</td>
                 </tr>
             `;
         });
@@ -548,15 +589,18 @@ export function initializeRelatorios(db, userId, common) {
     }
 
     function renderPrevisaoDesembolsos(dados) {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
         const previsoes = {};
 
         dados.forEach(d => {
             const dataVencimento = new Date(d.vencimento + 'T00:00:00');
+            if (Number.isNaN(dataVencimento.getTime()) || dataVencimento < hoje) return;
             const mesAno = `${dataVencimento.getFullYear()}-${String(dataVencimento.getMonth() + 1).padStart(2, '0')}`;
             if (!previsoes[mesAno]) {
                 previsoes[mesAno] = { total: 0, items: [] };
             }
-            previsoes[mesAno].total += d.valorSaldo || 0;
+                previsoes[mesAno].total += getPayableBalance(d);
             previsoes[mesAno].items.push(d);
         });
 
@@ -596,7 +640,7 @@ export function initializeRelatorios(db, userId, common) {
                         <td class="px-3 py-2">${escapeHtml(item.favorecidoNome)}</td>
                         <td class="px-3 py-2">${escapeHtml(item.descricao)}</td>
                         <td class="px-3 py-2">${new Date(item.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                        <td class="px-3 py-2 text-right">${formatCurrency(item.valorSaldo)}</td>
+                        <td class="px-3 py-2 text-right">${formatCurrency(getPayableBalance(item))}</td>
                     </tr>
                 `;
             });
@@ -619,9 +663,9 @@ export function initializeRelatorios(db, userId, common) {
             if (!categorias[categoriaId]) {
                 categorias[categoriaId] = { nome: categoriaNome, totalOriginal: 0, totalPago: 0, aPagar: 0 };
             }
-            categorias[categoriaId].totalOriginal += d.valorOriginal || 0;
-            categorias[categoriaId].totalPago += d.totalPago || 0;
-            categorias[categoriaId].aPagar += d.valorSaldo || 0;
+            categorias[categoriaId].totalOriginal += Number(d.valorOriginal ?? d.valor ?? 0);
+            categorias[categoriaId].totalPago += Number(d.totalPago ?? d.valorPago ?? 0);
+            categorias[categoriaId].aPagar += getPayableBalance(d);
         });
 
         let html = `
@@ -910,7 +954,7 @@ export function initializeRelatorios(db, userId, common) {
         lancamentos.forEach(lancamento => {
             const codigo = lancamento.codigoPlanoDeContas || contasPorId.get(lancamento.categoriaId)?.codigo;
             if (codigo && tree[codigo]) {
-                const valor = lancamento.valorOriginal || lancamento.valor || 0;
+                const valor = Number(lancamento.valorOriginal ?? lancamento.valor ?? 0);
                 tree[codigo].items.push(lancamento);
                 tree[codigo].total += valor;
             }

@@ -305,8 +305,9 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
                     : null;
 
                 // Se tiver a "ponte", continua para reverter a despesa/receita
-                const parentCollection = movData.origemTipo === 'PAGAMENTO_DESPESA' ? 'despesas' : 'receitas';
-                const subCollection = movData.origemTipo === 'PAGAMENTO_DESPESA' ? 'pagamentos' : 'recebimentos';
+                const isPagamento = movData.origemTipo === 'PAGAMENTO_DESPESA';
+                const parentCollection = isPagamento ? 'despesas' : 'receitas';
+                const subCollection = isPagamento ? 'pagamentos' : 'recebimentos';
                 const origemParentDocRef = doc(db, `users/${userId}/${parentCollection}`, movData.origemParentId);
                 const origemDocRef = doc(origemParentDocRef, subCollection, movData.origemId);
                 const historicoCollectionRef = collection(origemParentDocRef, subCollection);
@@ -318,9 +319,13 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
 
                 const origemParentDoc = origemParentDocRaw.data();
                 const pagamentoOriginalData = origemDoc.data();
-                const valorPrincipalEstornado = pagamentoOriginalData.valorPrincipal || 0;
-                const jurosEstornados = pagamentoOriginalData.jurosPagos || pagamentoOriginalData.jurosRecebidos || 0;
-                const descontosEstornados = pagamentoOriginalData.descontosAplicados || pagamentoOriginalData.descontosConcedidos || 0;
+                const valorPrincipalEstornado = Number(pagamentoOriginalData.valorPrincipal ?? pagamentoOriginalData.valorBase ?? 0);
+                const jurosEstornados = Number(pagamentoOriginalData.jurosPagos ?? pagamentoOriginalData.jurosRecebidos ?? 0);
+                const descontosEstornados = Number(pagamentoOriginalData.descontosAplicados ?? pagamentoOriginalData.descontosConcedidos ?? 0);
+                const valorMovimentadoEstornado = Number(
+                    pagamentoOriginalData.valorMovimentado ??
+                    (valorPrincipalEstornado + jurosEstornados - descontosEstornados)
+                );
 
                 // 2. EXECUTA AS ALTERAÇÕES
 
@@ -337,8 +342,10 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
                     tipoTransacao: "Estorno",
                     dataTransacao: new Date().toISOString().split('T')[0],
                     valorPrincipal: valorPrincipalEstornado,
-                    jurosPagos: jurosEstornados,
-                    descontosAplicados: descontosEstornados,
+                    ...(isPagamento
+                        ? { jurosPagos: jurosEstornados, descontosAplicados: descontosEstornados }
+                        : { jurosRecebidos: jurosEstornados, descontosConcedidos: descontosEstornados }),
+                    valorMovimentado: valorMovimentadoEstornado,
                     usuarioResponsavel: currentUserName || "Sistema",
                     motivoEstorno: "Estornado via Conciliação Bancária",
                     createdAt: serverTimestamp()
@@ -348,20 +355,30 @@ export function initializeMovimentacaoBancaria(db, userId, commonUtils, userName
                 const updateData = {};
                 const today = new Date(); today.setHours(0, 0, 0, 0);
 
-                if (movData.origemTipo === 'PAGAMENTO_DESPESA') {
-                    updateData.totalPago = (origemParentDoc.totalPago || 0) - valorPrincipalEstornado;
-                    updateData.totalJuros = (origemParentDoc.totalJuros || 0) - jurosEstornados;
-                    updateData.totalDescontos = (origemParentDoc.totalDescontos || 0) - descontosEstornados;
-                    updateData.valorSaldo = (origemParentDoc.valorOriginal || 0) + (updateData.totalJuros || 0) - (updateData.totalPago || 0) - (updateData.totalDescontos || 0);
+                if (isPagamento) {
+                    updateData.totalPago = Math.max(0, Number(origemParentDoc.totalPago ?? origemParentDoc.valorPago ?? 0) - valorPrincipalEstornado);
+                    updateData.totalJuros = Math.max(0, Number(origemParentDoc.totalJuros ?? 0) - jurosEstornados);
+                    updateData.totalDescontos = Math.max(0, Number(origemParentDoc.totalDescontos ?? 0) - descontosEstornados);
+                    const valorOriginal = Number(origemParentDoc.valorOriginal ?? origemParentDoc.valor ?? 0);
+                    updateData.valorSaldo = valorOriginal + updateData.totalJuros - updateData.totalPago - updateData.totalDescontos;
                     const vencimento = new Date(origemParentDoc.vencimento + 'T00:00:00');
-                    updateData.status = updateData.totalPago <= 0 ? (vencimento < today ? 'Vencido' : 'Pendente') : 'Pago Parcialmente';
+                    updateData.status = updateData.valorSaldo <= 0
+                        ? 'Pago'
+                        : updateData.totalPago > 0
+                            ? 'Pago Parcialmente'
+                            : (vencimento < today ? 'Vencido' : 'Pendente');
                 } else { // RECEBIMENTO_RECEITA
-                    updateData.totalRecebido = (origemParentDoc.totalRecebido || 0) - valorPrincipalEstornado;
-                    updateData.totalJuros = (origemParentDoc.totalJuros || 0) - jurosEstornados;
-                    updateData.totalDescontos = (origemParentDoc.totalDescontos || 0) - descontosEstornados;
-                    updateData.saldoPendente = (origemParentDoc.valorOriginal || 0) + (updateData.totalJuros || 0) - (updateData.totalRecebido || 0) - (updateData.totalDescontos || 0);
+                    updateData.totalRecebido = Math.max(0, Number(origemParentDoc.totalRecebido ?? 0) - valorPrincipalEstornado);
+                    updateData.totalJuros = Math.max(0, Number(origemParentDoc.totalJuros ?? 0) - jurosEstornados);
+                    updateData.totalDescontos = Math.max(0, Number(origemParentDoc.totalDescontos ?? 0) - descontosEstornados);
+                    const valorOriginal = Number(origemParentDoc.valorOriginal ?? origemParentDoc.valor ?? 0);
+                    updateData.saldoPendente = valorOriginal + updateData.totalJuros - updateData.totalRecebido - updateData.totalDescontos;
                     const vencimento = new Date((origemParentDoc.dataVencimento || origemParentDoc.vencimento) + 'T00:00:00');
-                    updateData.status = updateData.totalRecebido <= 0 ? (vencimento < today ? 'Vencido' : 'Pendente') : 'Recebido Parcialmente';
+                    updateData.status = updateData.saldoPendente <= 0
+                        ? 'Recebido'
+                        : updateData.totalRecebido > 0
+                            ? 'Recebido Parcialmente'
+                            : (vencimento < today ? 'Vencido' : 'Pendente');
                 }
                 transaction.update(origemParentDocRef, updateData);
             });
