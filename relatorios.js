@@ -1,4 +1,5 @@
 import { getFirestore, collection, query, where, getDocs, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { escapeHtml } from './security-utils.js';
 
 export function initializeRelatorios(db, userId, common) {
     if (!userId) return;
@@ -103,7 +104,7 @@ export function initializeRelatorios(db, userId, common) {
             case 'fluxo-caixa-dre':
                 const planosDeContasQuery = query(collection(db, `users/${userId}/planosDeContas`));
                 const planosDeContasSnap = await getDocs(planosDeContasQuery);
-                const planosDeContas = planosDeContasSnap.docs.map(doc => doc.data());
+                const planosDeContas = planosDeContasSnap.docs.map(snapshotDoc => ({ id: snapshotDoc.id, ...snapshotDoc.data() }));
                 const tree = buildCashFlowTree(planosDeContas, relatorioDadosBase);
                 visualizacaoAreaReceber.innerHTML = renderFluxoDeCaixa(tree);
                 dadosParaRenderizar = relatorioDadosBase; // for export button logic
@@ -188,7 +189,7 @@ export function initializeRelatorios(db, userId, common) {
             bucket.items.sort((a, b) => b.diasAtraso - a.diasAtraso).forEach(d => {
                 bucketHtml += `
                     <tr>
-                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${d.clienteNome}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.clienteNome)}</td>
                         <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${new Date(d.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-4 py-2 whitespace-nowrap text-sm text-center font-semibold text-red-700">${d.diasAtraso}</td>
                         <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">${formatCurrency(d.saldoPendente)}</td>
@@ -247,7 +248,7 @@ export function initializeRelatorios(db, userId, common) {
             const cat = categorias[id];
             html += `
                 <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${cat.nome}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${escapeHtml(cat.nome)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${formatCurrency(cat.total)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-green-600">${formatCurrency(cat.recebido)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-blue-600">${formatCurrency(cat.aReceber)}</td>
@@ -308,8 +309,8 @@ export function initializeRelatorios(db, userId, common) {
             previsoes[mesAno].items.forEach(item => {
                 html += `
                     <tr class="border-b">
-                        <td class="px-3 py-2">${item.clienteNome}</td>
-                        <td class="px-3 py-2">${item.descricao}</td>
+                        <td class="px-3 py-2">${escapeHtml(item.clienteNome)}</td>
+                        <td class="px-3 py-2">${escapeHtml(item.descricao)}</td>
                         <td class="px-3 py-2">${new Date(item.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-3 py-2 text-right">${formatCurrency(item.saldoPendente)}</td>
                     </tr>
@@ -348,8 +349,8 @@ export function initializeRelatorios(db, userId, common) {
 
                 html += `
                     <tr>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.clienteNome}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.descricao}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.clienteNome)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.descricao)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${new Date(d.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${formatCurrency(d.valorOriginal)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">${formatCurrency(d.saldoPendente)}</td>
@@ -393,7 +394,7 @@ export function initializeRelatorios(db, userId, common) {
             case 'fluxo-caixa-dre':
                 const planosDeContasQuery = query(collection(db, `users/${userId}/planosDeContas`));
                 const planosDeContasSnap = await getDocs(planosDeContasQuery);
-                const planosDeContas = planosDeContasSnap.docs.map(doc => doc.data());
+                const planosDeContas = planosDeContasSnap.docs.map(snapshotDoc => ({ id: snapshotDoc.id, ...snapshotDoc.data() }));
                 const tree = buildCashFlowTree(planosDeContas, dadosFiltrados);
                 visualizacaoAreaPagar.innerHTML = renderFluxoDeCaixa(tree);
                 dadosParaRenderizar = dadosFiltrados;
@@ -435,9 +436,9 @@ export function initializeRelatorios(db, userId, common) {
 
                 html += `
                     <tr>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.numeroDocumento || 'N/A'}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.descricao}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.favorecidoNome}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.numeroDocumento || 'N/A')}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.descricao)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.favorecidoNome)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${new Date(d.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${formatCurrency(d.valorOriginal)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">${formatCurrency(d.valorSaldo)}</td>
@@ -532,8 +533,8 @@ export function initializeRelatorios(db, userId, common) {
         dadosComAtraso.forEach(d => {
             html += `
                 <tr class="atraso-item" data-dias-atraso="${d.diasAtraso}">
-                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${d.favorecidoNome}</td>
-                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${d.descricao}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.favorecidoNome)}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${escapeHtml(d.descricao)}</td>
                     <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${new Date(d.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                     <td class="px-4 py-2 whitespace-nowrap text-sm text-center font-semibold text-red-700">${d.diasAtraso}</td>
                     <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">${formatCurrency(d.valorSaldo)}</td>
@@ -592,8 +593,8 @@ export function initializeRelatorios(db, userId, common) {
             previsoes[mesAno].items.forEach(item => {
                 html += `
                     <tr class="border-b">
-                        <td class="px-3 py-2">${item.favorecidoNome}</td>
-                        <td class="px-3 py-2">${item.descricao}</td>
+                        <td class="px-3 py-2">${escapeHtml(item.favorecidoNome)}</td>
+                        <td class="px-3 py-2">${escapeHtml(item.descricao)}</td>
                         <td class="px-3 py-2">${new Date(item.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                         <td class="px-3 py-2 text-right">${formatCurrency(item.valorSaldo)}</td>
                     </tr>
@@ -639,7 +640,7 @@ export function initializeRelatorios(db, userId, common) {
         Object.values(categorias).sort((a,b) => b.totalOriginal - a.totalOriginal).forEach(cat => {
             html += `
                 <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${cat.nome}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${escapeHtml(cat.nome)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-bold">${formatCurrency(cat.totalOriginal)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-green-600">${formatCurrency(cat.totalPago)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-red-600">${formatCurrency(cat.aPagar)}</td>
@@ -685,7 +686,7 @@ export function initializeRelatorios(db, userId, common) {
 
         } catch (error) {
             console.error("Erro ao gerar relatório de Contas a Pagar:", error);
-            visualizacaoAreaPagar.innerHTML = `<p class="text-center text-red-500 py-12">Erro ao carregar o relatório: ${error.message}</p>`;
+            visualizacaoAreaPagar.innerHTML = `<p class="text-center text-red-500 py-12">Erro ao carregar o relatório: ${escapeHtml(error.message)}</p>`;
         } finally {
             gerarRelatorioPagarBtn.disabled = false;
             gerarRelatorioPagarBtn.innerHTML = '<span class="material-symbols-outlined text-base mr-2">analytics</span> Gerar Relatório';
@@ -727,7 +728,7 @@ export function initializeRelatorios(db, userId, common) {
 
         } catch (error) {
             console.error("Erro ao gerar relatório:", error);
-            visualizacaoAreaReceber.innerHTML = `<p class="text-center text-red-500 py-12">Erro ao carregar o relatório: ${error.message}</p>`;
+            visualizacaoAreaReceber.innerHTML = `<p class="text-center text-red-500 py-12">Erro ao carregar o relatório: ${escapeHtml(error.message)}</p>`;
         } finally {
             gerarRelatorioReceberBtn.disabled = false;
             gerarRelatorioReceberBtn.innerHTML = '<span class="material-symbols-outlined text-base mr-2">analytics</span> Gerar Relatório';
@@ -860,6 +861,7 @@ export function initializeRelatorios(db, userId, common) {
 
     function buildCashFlowTree(planosDeContas, lancamentos) {
         const tree = {};
+        const contasPorId = new Map(planosDeContas.map(conta => [conta.id, conta]));
 
         // Initialize tree with all accounts from planoDeContas
         planosDeContas.forEach(conta => {
@@ -873,8 +875,8 @@ export function initializeRelatorios(db, userId, common) {
 
         // Populate items and calculate totals for each account
         lancamentos.forEach(lancamento => {
-            const codigo = lancamento.codigoPlanoDeContas;
-            if (tree[codigo]) {
+            const codigo = lancamento.codigoPlanoDeContas || contasPorId.get(lancamento.categoriaId)?.codigo;
+            if (codigo && tree[codigo]) {
                 const valor = lancamento.valorOriginal || lancamento.valor || 0;
                 tree[codigo].items.push(lancamento);
                 tree[codigo].total += valor;
@@ -923,11 +925,11 @@ export function initializeRelatorios(db, userId, common) {
             const displayStyle = isVisible ? '' : 'display: none;';
 
             html += `
-                <tr class="dre-row ${rowClass}" data-id="${node.codigo}" data-parent-id="${node.codigoPai || ''}" style="${displayStyle}">
+                <tr class="dre-row ${rowClass}" data-id="${escapeHtml(node.codigo)}" data-parent-id="${escapeHtml(node.codigoPai || '')}" style="${displayStyle}">
                     <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700" style="padding-left: ${paddingLeft + 16}px;">
                         <div class="flex items-center">
                             ${hasChildren ? `<span class="dre-toggle-icon material-symbols-outlined text-base cursor-pointer mr-2 transition-transform">chevron_right</span>` : '<span class="w-6 mr-2"></span>'}
-                            <span>${node.codigo} - ${node.nome}</span>
+                            <span>${escapeHtml(node.codigo)} - ${escapeHtml(node.nome)}</span>
                         </div>
                     </td>
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-right font-mono">${formatCurrency(node.total)}</td>
